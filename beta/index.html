@@ -32,15 +32,33 @@
   html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   body { display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
-  header { display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: var(--panel);
-    border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  header h1 { font-size: 15px; margin: 0 8px 0 0; white-space: nowrap; }
-  .row { display: flex; gap: 8px; align-items: center; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
-  .row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  /* slim top bar (watching): game title · date · source on the left, Find a game on the right */
+  #topbar { display: flex; gap: 10px; align-items: center; height: 40px; padding: 0 12px 0 16px; background: var(--panel);
+    border-bottom: 1px solid var(--border); flex: none; }
+  #gameTitle { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  #gameTitle .sub { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  #gameTitle.idle { font-weight: 400; color: var(--muted); }
+  #topbar .tag { flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+  #findBtn { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; }
+  #findBtn svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+  #findBtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+  /* finder (finding): one box, quick chips, then the game list */
+  #finder { background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 16px 0; flex: none; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+  #finder .frow { display: flex; gap: 8px; align-items: center; }
   input[type=text] { flex: 1 1 220px; min-width: 0; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 7px 10px; font-size: 14px; }
   input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  #site { flex: 0 1 200px; }
+  #goBtn { height: 34px; padding: 0 16px; }
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 0 10px; }
+  #chips .clabel { font-size: 12px; color: var(--muted); margin-right: 2px; }
+  .chip { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; background: var(--panel2);
+    font-size: 12px; line-height: 1; max-width: 100%; }
+  .chip button { background: none; border: none; border-radius: 999px; padding: 5px 10px; font-size: 12px; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  .chip button.x { padding: 5px 8px 5px 2px; color: var(--muted); }
+  .chip button.x:hover { color: var(--err); }
+  .chip.preset { border-color: var(--accent); }
+  .chip:hover { border-color: var(--accent); }
   button, select { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
     padding: 6px 10px; font-size: 13px; cursor: pointer; }
   button:hover, select:hover { border-color: var(--accent); }
@@ -52,11 +70,9 @@
   #notice code { background: var(--panel2); padding: 1px 4px; border-radius: 3px; }
   #notice ul { margin: 6px 0 0; padding-left: 20px; }
   /* browse */
-  #browse { display: none; margin: 0; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+  #browse { display: none; margin: 0 -16px; padding: 10px 16px; border-top: 1px solid var(--border);
     max-height: 55vh; overflow: auto; }
   #browse.open { display: block; }
-  #chooserBar { padding: 6px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
-  #chooserBtn { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #browse h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 6px; }
   #browse h3:first-child { margin-top: 0; }
   .bhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -105,14 +121,11 @@
   .srctabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 8px 0 2px; }
   .srctabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
   .srctabs .small { margin-left: 4px; }
-  #ytHost { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 150px); border: 0; background: var(--stage); }
+  #ytHost { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 90px); /* slim bar (40) + control bar (~40) */ border: 0; background: var(--stage); }
   main { flex: 1; display: flex; min-height: 0; }
   #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #gameTitle { padding: 6px 16px; font-weight: 600; background: var(--panel); border-bottom: 1px solid var(--border); display: none;
-    overflow-wrap: anywhere; }
-  #gameTitle .sub { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
   #videoWrap { position: relative; flex: 1; background: var(--stage); display: flex; align-items: center; justify-content: center; min-height: 200px; }
-  video { width: 100%; height: 100%; max-height: calc(100vh - 150px); background: var(--stage); display: block; }
+  video { width: 100%; height: 100%; max-height: calc(100vh - 90px); /* slim bar (40) + control bar (~40) */ background: var(--stage); display: block; }
   #osd { position: absolute; top: 10px; right: 12px; background: var(--overlay); color: var(--overlay-text); padding: 4px 9px; border-radius: 5px;
     font-variant-numeric: tabular-nums; font-size: 13px; pointer-events: none; transition: opacity .3s; }
   #flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--overlay); color: var(--overlay-text);
@@ -202,40 +215,40 @@
     aside.collapsed #panelToggle svg { transform: rotate(-90deg); }
   }
   @media (max-width: 480px) {
-    header h1 { flex: 1 1 100%; }
-    #site { flex: 1 1 140px; }
+    #topbar { padding: 0 8px 0 12px; gap: 6px; }
+    #findBtn .flbl { display: none; } /* icon only */
+    #findBtn { padding: 0 9px; }
+    #finder { padding: 8px 12px 0; }
+    #browse { margin: 0 -12px; padding: 10px 12px; }
+    #goBtn { padding: 0 12px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>Game Film Viewer <span class="badge">beta</span></h1>
-  <div class="row">
-    <input id="src" type="text" spellcheck="false" autocomplete="off"
-           placeholder="Paste a game link, embed code, broadcast ID, .m3u8 URL, or YouTube link" aria-label="Game link">
-    <button id="loadBtn" class="primary">Load</button>
-  </div>
-  <div class="row">
-    <label for="school">School</label>
-    <div id="schoolBox">
-      <input id="school" type="text" spellcheck="false" autocomplete="off" placeholder="Search schools, e.g. Bellevue, neb wes, occ"
-             aria-label="Search schools" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="schoolList">
-      <ul id="schoolList" role="listbox" aria-label="Matching schools" hidden></ul>
-    </div>
-    <button id="unionBtn" type="button" title="Union Adventist games on Union's and its opponents' Hudl sites, plus Union's YouTube">Union games</button>
-    <label for="site">Hudl site</label>
-    <input id="site" type="text" spellcheck="false" autocomplete="off" placeholder="e.g. mountmarty" aria-label="School site slug">
-    <button id="browseBtn">Browse</button>
-  </div>
+<header id="topbar">
+  <div id="gameTitle" class="idle">No game loaded</div>
+  <span class="badge tag" title="Beta: the test bed for upcoming changes">beta</span>
+  <button id="findBtn" type="button" aria-controls="finder" aria-expanded="false" title="Find a game (/)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+    <span class="flbl">Find a game</span>
+  </button>
 </header>
-
 <div id="notice" role="status"></div>
-<div id="chooserBar" hidden><button id="chooserBtn" type="button" aria-controls="browse" aria-expanded="false" title="Show the game list again">&#9662; Games: <span></span></button></div>
-<div id="browse" aria-label="School games"></div>
+<section id="finder" hidden aria-label="Find a game">
+  <div class="frow">
+    <div id="schoolBox">
+      <input id="school" type="text" spellcheck="false" autocomplete="off" placeholder="Search a school, or paste a game link / ID / YouTube URL"
+             aria-label="Search a school, or paste a game link, ID or YouTube URL" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="schoolList">
+      <ul id="schoolList" role="listbox" aria-label="Matches" hidden></ul>
+    </div>
+    <button id="goBtn" type="button" class="primary">Go</button>
+  </div>
+  <div id="chips" aria-label="Quick picks"></div>
+  <div id="browse" aria-label="Games"></div>
+</section>
 
 <main>
   <div id="stage">
-    <div id="gameTitle"></div>
     <div id="videoWrap">
       <video id="video" controls playsinline preload="auto"></video>
       <div id="osd">1.00x</div>
@@ -295,9 +308,9 @@
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const video = $('video'), srcInput = $('src'), statusEl = $('status'), osd = $('osd'), flashEl = $('flash');
+  const video = $('video'), srcInput = document.createElement('input'), /* the one box (#school) replaced the paste box */ statusEl = $('status'), osd = $('osd'), flashEl = $('flash');
   const qualitySel = $('quality'), speedSel = $('speed'), noticeEl = $('notice'), browseEl = $('browse');
-  const siteInput = $('site'), gameTitleEl = $('gameTitle');
+  const siteInput = document.createElement('input') /* the Hudl site box is gone; ?site= still works */, gameTitleEl = $('gameTitle');
   const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   const FRAME = 1 / 30;
   const HUDL = 'https://vcloud.hudl.com';
@@ -850,11 +863,17 @@
     const when = gameDateLabel(info);
     // The tab title follows the game too, so it never keeps the previous game's name or date.
     document.title = info && info.title ? `${info.title}${when ? ' · ' + when : ''} — ${BASE_TITLE}` : BASE_TITLE;
-    if (!info || !info.title) { gameTitleEl.style.display = 'none'; gameTitleEl.textContent = ''; return; }
+    if (!info || !info.title) {
+      gameTitleEl.classList.add('idle');
+      gameTitleEl.textContent = current ? (current.yt ? 'YouTube video' : current.id ? `Broadcast ${current.id}` : 'Stream') : 'No game loaded';
+      gameTitleEl.title = '';
+      return;
+    }
+    gameTitleEl.classList.remove('idle');
     gameTitleEl.textContent = info.title;
     const sub = [when, gameSource(info)].filter(Boolean).join(' · ');
     if (sub) { const sp = document.createElement('span'); sp.className = 'sub'; sp.textContent = '· ' + sub; gameTitleEl.appendChild(sp); }
-    gameTitleEl.style.display = 'block';
+    gameTitleEl.title = info.title + (sub ? ' · ' + sub : ''); // full text when the bar truncates it
   }
 
   function destroy() {
@@ -1683,7 +1702,7 @@
     if (opts.multi) slug = String(slugRaw || '').split(',').map((x) => x.trim().toLowerCase()).filter((x) => /^[a-z0-9_-]{2,64}$/.test(x)).join(',');
     else slug = String(slugRaw || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').replace(/[/?#].*$/, '');
     if (!slug || (!opts.multi && !/^[a-z0-9_-]{2,64}$/.test(slug))) { openChooser(); browseEl.innerHTML = '<div class="empty">Enter a school\'s site name, e.g. <code>mountmarty</code> (the part after gpacnetwork.com/).</div>'; return; }
-    if (!opts.multi) { siteInput.value = slug; store(LS_SITE, slug); }
+    if (!opts.multi) { siteInput.value = slug; store(LS_SITE, slug); if (!opts.keepCtx) addRecent('site:' + slug, slug); }
     const seq = (browseState ? browseState.seq : 0) + 1;
     browseState = { slug, page: 1, seq, fixed: opts.fixed || '', label: opts.label || slug, multi: !!opts.multi };
     const st0 = browseState;
@@ -1710,6 +1729,7 @@
     const siteTitle = opts.multi ? '' : (allList.find(mine) || pastList.find(mine) || liveList.find(mine) || {}).site_title;
     browseHead(opts.label ? opts.label : (siteTitle ? `${String(siteTitle).trim()} (${slug})` : slug));
     if (!opts.label && siteTitle) st.label = String(siteTitle).trim(); // used in messages
+    if (!opts.label && !opts.multi && siteTitle && recentList().some((x) => x.k === 'site:' + slug)) addRecent('site:' + slug, st.label);
     if (opts.note) {
       const d = document.createElement('div'); d.className = 'bstat';
       const total = all.status === 'fulfilled' ? Number(all.value.item_count) || 0 : 0;
@@ -1987,26 +2007,90 @@
     }
   });
 
-  // ---------- game chooser: folds away once a game is picked, with a button to bring it back unchanged ----------
-  // Folding only hides #browse (display: none), so the list, filters, loaded pages and search state all stay as they were.
-  const chooserBar = $('chooserBar'), chooserBtn = $('chooserBtn');
-  let chooserScroll = 0;
-  function openChooser() { browseEl.className = 'open'; chooserBar.hidden = true; chooserBtn.setAttribute('aria-expanded', 'true'); }
-  function closeChooser() { browseEl.className = ''; chooserBar.hidden = true; chooserBtn.setAttribute('aria-expanded', 'false'); }
-  function collapseChooser() {
-    if (!browseEl.classList.contains('open')) return; // nothing open: a pasted link adds no button
-    chooserScroll = browseEl.scrollTop;
-    const h = browseEl.querySelector('.bhead strong');
-    chooserBtn.querySelector('span').textContent = (h && h.textContent.trim()) || 'game list';
-    browseEl.className = '';
-    chooserBar.hidden = false; chooserBtn.setAttribute('aria-expanded', 'false');
+  // ---------- finder: the one box, quick chips and the game list; folds to the slim bar while watching ----------
+  // Folding only hides #finder (display: none), so the box text, the list, its tab, filters, loaded pages and
+  // search state all stay as they were; the list's scroll position is put back on reopening.
+  const finderEl = $('finder'), findBtn = $('findBtn');
+  let finderScroll = 0;
+  function finderOpen() { return !finderEl.hidden; }
+  function openFinder(focusBox) {
+    if (!finderOpen()) {
+      finderEl.hidden = false; findBtn.setAttribute('aria-expanded', 'true');
+      browseEl.scrollTop = finderScroll;
+    }
+    if (focusBox) { try { schoolInput.focus({ preventScroll: true }); schoolInput.select(); } catch (e) {} }
   }
-  function restoreChooser() {
-    openChooser();
-    browseEl.scrollTop = chooserScroll;
-    try { browseEl.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  function foldFinder() {
+    if (!finderOpen()) return;
+    finderScroll = browseEl.scrollTop;
+    saClose();
+    finderEl.hidden = true; findBtn.setAttribute('aria-expanded', 'false');
   }
-  chooserBtn.addEventListener('click', restoreChooser);
+  // A list (school, Union games, YouTube) is opening: show it in the finder.
+  function openChooser() { browseEl.className = 'open'; openFinder(false); }
+  // The list's own Close: the list goes away, the finder (box and chips) stays.
+  function closeChooser() { browseEl.className = ''; }
+  // A game is being loaded: fold the finder (if open) back to the slim bar, keeping its state.
+  function collapseChooser() { foldFinder(); }
+  findBtn.addEventListener('click', () => { if (finderOpen() && current) foldFinder(); else openFinder(true); });
+  // Escape (when nothing inside used it) or a click outside folds the finder, but only while a game is loaded.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || !finderOpen() || !current) return;
+    e.preventDefault(); foldFinder(); focusPlayer();
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!finderOpen() || !current) return;
+    if (finderEl.contains(e.target) || findBtn.contains(e.target) || noticeEl.contains(e.target)) return;
+    foldFinder();
+  });
+
+  // ---- quick chips: Union games, Union YouTube and the 4 most recent schools / lists ----
+  const LS_RECENT = 'hudl-film-viewer:recentLists';
+  function recentList() {
+    const r = load(LS_RECENT, []);
+    return Array.isArray(r) ? r.filter((x) => x && typeof x.k === 'string' && typeof x.label === 'string').slice(0, 4) : [];
+  }
+  function addRecent(k, label) {
+    if (!/^(school|site):.{1,200}$/.test(k)) return;
+    const list = recentList().filter((x) => x.k !== k);
+    list.unshift({ k, label: String(label).slice(0, 120) });
+    store(LS_RECENT, list.slice(0, 4)); renderChips();
+  }
+  function removeRecent(k) { store(LS_RECENT, recentList().filter((x) => x.k !== k)); renderChips(); }
+  function chip(label, act, data, removable, preset) {
+    const c = document.createElement('span'); c.className = 'chip' + (preset ? ' preset' : '');
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.chip = act; b.dataset.k = data || ''; b.textContent = label; b.title = label;
+    c.appendChild(b);
+    if (removable) {
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.dataset.chip = 'remove'; x.dataset.k = data;
+      x.textContent = '\u00d7'; x.title = `Remove ${label}`; x.setAttribute('aria-label', `Remove ${label} from recent`);
+      c.appendChild(x);
+    }
+    return c;
+  }
+  function renderChips() {
+    const box = $('chips'); box.textContent = '';
+    box.appendChild(chip('Union games', 'union', '', false, true));
+    box.appendChild(chip('Union YouTube', 'unionyt', '', false, true));
+    const rec = recentList();
+    if (rec.length) { const l = document.createElement('span'); l.className = 'clabel'; l.textContent = 'Recent:'; box.appendChild(l); }
+    rec.forEach((r) => box.appendChild(chip(r.label, 'recent', r.k, true)));
+  }
+  $('chips').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-chip]'); if (!b) return;
+    saClose();
+    const act = b.dataset.chip, k = b.dataset.k;
+    if (act === 'union') openUnion();
+    else if (act === 'unionyt') { browseCtx = { school: UNION.school, union: true, sources: ['hudl', 'yt'], active: '' }; showSource('yt'); }
+    else if (act === 'remove') removeRecent(k);
+    else if (act === 'recent') {
+      if (k.startsWith('school:')) {
+        const sc = (SCHOOLS || []).find((x) => x.n === k.slice(7));
+        if (sc) pickSchool(sc); else removeRecent(k);
+      } else if (k.startsWith('site:')) openBrowse(k.slice(5));
+    }
+  });
+
   // Send keys to the player (not the hidden list button) so the shortcuts keep working.
   function focusPlayer() {
     try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
@@ -2023,6 +2107,7 @@
     return s;
   }
   function pickSchool(sc) {
+    addRecent('school:' + sc.n, sc.n);
     const sources = schoolSources(sc);
     browseCtx = { school: sc, union: false, sources, active: '' };
     if (!sources.length) { showNoSource(sc); return; }
@@ -2185,11 +2270,35 @@
     const sb = document.createElement('span'); sb.className = 'sb'; sb.appendChild(mkBadge('Hudl site')); li.appendChild(sb);
     return li;
   }
+  // The one box: is this text a game (link, ID, YouTube, .m3u8, "ID @ h:mm:ss") rather than a school name?
+  function boxGame(text) {
+    const t = String(text || '').trim().replace(/\s*@\s*\d+(?::\d{1,2}){0,2}\s*$/, '');
+    const p = t ? parseInput(t) : null;
+    if (!p) return null;
+    if (p.none) return p.slug ? { label: `Open ${p.slug}'s games`, p } : null; // e.g. a gpacnetwork.com school page
+    return { label: p.yt ? `Play YouTube video ${p.yt}` : p.url ? 'Play this .m3u8 stream' : `Load broadcast ${p.id}`, p };
+  }
+  function goBox() {
+    const text = schoolInput.value.trim();
+    if (!text) { schoolInput.focus(); return; }
+    if (boxGame(text)) { saClose(); srcInput.value = text; loadFromInput(text, 0); focusPlayer(); return; }
+    clearTimeout(saTimer);
+    if (saQuery !== text || schoolList.hidden) saRender(text);
+    const lis = schoolList.querySelectorAll('li[role="option"]');
+    const li = lis[saSel >= 0 ? saSel : 0];
+    if (li) saPick(saItems[+li.dataset.i]);
+  }
   function saRender(raw) {
     const q = String(raw || '').trim();
     saQuery = q; saSeq++;
     schoolList.innerHTML = ''; saItems = []; saSel = -1;
     if (!q) { saClose(); return; }
+    const g = boxGame(q);
+    if (g) { // a game link / ID: offer to load it (Enter or Go does the same)
+      const li = document.createElement('li'); const n = document.createElement('span'); n.className = 'sn'; n.textContent = g.label;
+      const ss = document.createElement('span'); ss.className = 'ss'; ss.textContent = 'Enter'; li.appendChild(n); li.appendChild(ss);
+      saAdd(li, { game: q }); saOpen(); return;
+    }
     const res = schoolIndex.search(q, 12);
     if (res.length) saInfo('hdr', 'Directory');
     res.forEach(({ sc }) => saAdd(schoolRow(sc), { sc }));
@@ -2231,6 +2340,7 @@
   function saPick(item) {
     if (!item) return;
     if (item.hudlSearch) { saHudl(item.hudlSearch); schoolInput.focus(); return; }
+    if (item.game) { saClose(); srcInput.value = item.game; loadFromInput(item.game, 0); focusPlayer(); return; }
     saClose();
     if (item.sc) { schoolInput.value = item.sc.n; schoolInput.blur(); pickSchool(item.sc); return; }
     if (item.site) { schoolInput.value = item.site.title; schoolInput.blur(); openBrowse(item.site.slug); }
@@ -2245,11 +2355,7 @@
       saHighlight(saSel < 0 ? (e.key === 'ArrowDown' ? 0 : -1) : saSel + (e.key === 'ArrowDown' ? 1 : -1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      clearTimeout(saTimer);
-      if (saQuery !== schoolInput.value.trim()) saRender(schoolInput.value);
-      const lis = schoolList.querySelectorAll('li[role="option"]');
-      const li = lis[saSel >= 0 ? saSel : 0];
-      if (li) saPick(saItems[+li.dataset.i]);
+      goBox();
     } else if (e.key === 'Escape') {
       if (!schoolList.hidden) { e.preventDefault(); e.stopPropagation(); saClose(); }
     }
@@ -2259,7 +2365,7 @@
     const li = e.target.closest('li[role="option"]'); if (!li) return;
     saPick(saItems[+li.dataset.i]);
   });
-  $('unionBtn').addEventListener('click', () => { saClose(); openUnion(); $('unionBtn').blur(); });
+  $('goBtn').addEventListener('click', goBox);
 
   // ---------- keyboard ----------
   function isTyping(el) {
@@ -2299,6 +2405,7 @@
       }
       case k === 'm' || k === 'M': addBookmark(); break;
       case k === 'b' || k === 'B': setPanel(!panelCollapsed, true); break;
+      case k === '/': openFinder(true); break;
       case k === 'f' || k === 'F':
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         else if ($('videoWrap').requestFullscreen) $('videoWrap').requestFullscreen().catch(() => {});
@@ -2695,14 +2802,7 @@
   }
 
   // ---------- wiring ----------
-  $('loadBtn').addEventListener('click', () => loadFromInput(srcInput.value, 0));
-  srcInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); loadFromInput(srcInput.value, 0); srcInput.blur(); }
-  });
-  $('browseBtn').addEventListener('click', () => openBrowse(siteInput.value));
-  siteInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); openBrowse(siteInput.value); siteInput.blur(); }
-  });
+  renderChips();
 
   setPanel(load(LS_PANEL, false) === true, false);
   let qs;
@@ -2710,6 +2810,7 @@
   const lastSite = load(LS_SITE, '');
   if (typeof lastSite === 'string' && lastSite) siteInput.value = lastSite;
   if (qs.get('site')) openBrowse(qs.get('site'));
+  if (!qs.get('src')) openFinder(!qs.get('site')); // nothing to watch yet: start in the finder
   if (qs.get('src')) {
     srcInput.value = qs.get('src');
     // Decode any shared bookmarks (#bm=) first so they attach to this game.
