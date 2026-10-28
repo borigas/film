@@ -981,7 +981,7 @@
     YTP.ticker = setInterval(() => {
       if (!YTP.on || YTP.player !== player) return;
       osd.textContent = osdText();
-      if (YTP.ready) updateUrl(false);
+      // (the address bar's t= is only written when paused: see updateUrl)
       // The duration is often still 0 at onReady: fill it in once YouTube knows it.
       if (YTP.ready && !statusEl.className && YTP.shownDur !== Math.round(ytDuration())) ytStatus();
     }, 250);
@@ -1123,7 +1123,7 @@
   function notReadyOnTv() { flash(current ? 'Still loading on the TV' : 'Load a game first'); return false; }
   // Seek to an absolute time; returns false if nothing happened.
   function seekAbs(t) {
-    if (YTP.on) { if (!YTP.ready) return ytNotReady(); seekTo(t); updateUrl(true); return true; }
+    if (YTP.on) { if (!YTP.ready) return ytNotReady(); seekTo(t); updateUrlSoon(); return true; }
     if (!CAST.connected) { seekTo(t); return true; }
     if (!remoteReady()) return notReadyOnTv();
     const [a, b] = curRange();
@@ -1131,7 +1131,7 @@
     CAST.player.currentTime = t;
     CAST.ctl.seek();
     CAST.lastTime = t; CAST.timeKey = current.key;
-    renderCastTime(); updateUrl(true);
+    renderCastTime(); updateUrlSoon();
     return true;
   }
   function seekBy(d) { return seekAbs(nowTime() + d); }
@@ -1213,7 +1213,16 @@
   const FRAMED = (() => { try { return window.top !== window.self; } catch (e) { return true; } })();
   const CAN_LINK = !FRAMED && /^(https?|file):$/.test(location.protocol);
   let lastUrlUpdate = 0;
-  function updateUrl(force) {
+  // Is the game playing right now (here, in the YouTube player, or on the TV)?
+  function isPlaying() {
+    if (YTP.on) { const s = ytState(); return s === 1 || s === 3; }
+    if (CAST.connected) return !!(remoteReady() && !CAST.player.isPaused && CAST.player.playerState !== 'IDLE');
+    return !video.paused && !video.ended;
+  }
+  // The address bar's t= is written only while paused (pause, end, or a seek / frame step made while paused), so
+  // it stays still and easy to copy during playback. src= is set whenever a game loads; #bm= is kept.
+  // final: write the current time even while playing (pagehide, so reload / back resume where you were).
+  function updateUrl(force, final) {
     if (!current || !CAN_LINK) return;
     const now = Date.now();
     if (!force && now - lastUrlUpdate < 2000) return;
@@ -1222,13 +1231,24 @@
       const params = new URLSearchParams(location.search);
       params.set('src', current.id || current.url || current.input || '');
       params.delete('site');
-      // Until playback has actually positioned itself, keep the requested start time.
-      // While casting, t follows the TV.
-      const t = Math.floor(CAST.connected && !YTP.on ? remoteTime() : (pendingStart || localTime()));
-      if (t > 0) params.set('t', String(t)); else params.delete('t');
-      history.replaceState(null, '', `${location.pathname}?${params.toString()}${sharedHash}`); // keeps #bm= while shared
+      const srcChanged = new URLSearchParams(location.search).get('src') !== params.get('src');
+      if (final || srcChanged || !isPlaying()) {
+        // Until playback has actually positioned itself, keep the requested start time.
+        // While casting, t follows the TV.
+        const t = Math.floor(CAST.connected && !YTP.on ? remoteTime() : (pendingStart || localTime()));
+        if (t > 0) params.set('t', String(t)); else params.delete('t');
+      } // else: playing, so leave whatever t= the address bar already shows
+      const next = `${location.pathname}?${params.toString()}${sharedHash}`; // keeps #bm= while shared
+      if (next !== location.pathname + location.search + location.hash) history.replaceState(null, '', next);
     } catch (e) {}
   }
+  let urlTimer = 0;
+  function updateUrlSoon() { clearTimeout(urlTimer); urlTimer = setTimeout(() => updateUrl(true), 400); } // debounced (held arrow keys)
+  // Leaving or reloading: write the live time once. Chrome fixes a reload's URL before pagehide fires, so
+  // beforeunload (which runs earlier) does the work for reloads; pagehide covers the remaining cases (e.g. bfcache).
+  const writeFinalTime = () => { clearTimeout(urlTimer); updateUrl(true, true); };
+  window.addEventListener('beforeunload', writeFinalTime);
+  window.addEventListener('pagehide', writeFinalTime);
   function shareRef() { return (current && (current.id || current.input || current.url)) || ''; }
   function shareText(t) { return `${shareRef()} @ ${fmt(t)}`; }
   function shareLink(t) {
@@ -1249,9 +1269,10 @@
       document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
     } catch (e) { return false; }
   }
-  video.addEventListener('timeupdate', () => { if (CAST.connected) return; osd.textContent = osdText(); updateUrl(false); });
-  video.addEventListener('seeked', () => { if (!CAST.connected) updateUrl(true); });
+  video.addEventListener('timeupdate', () => { if (CAST.connected) return; osd.textContent = osdText(); });
+  video.addEventListener('seeked', () => { if (!CAST.connected) updateUrlSoon(); }); // a seek while paused updates t=
   video.addEventListener('pause', () => updateUrl(true));
+  video.addEventListener('ended', () => updateUrl(true));
   $('copyLink').addEventListener('click', async () => {
     if (!current) { flash('Load a game first'); return; }
     const t = nowTime();
@@ -2228,7 +2249,7 @@
           if (!YTP.ready) { ytNotReady(); break; }
           const base = ytTime();
           try { YTP.player.pauseVideo(); } catch (err) {}
-          seekTo(base + (k === ',' || k === '<' ? -FRAME : FRAME)); updateUrl(true);
+          seekTo(base + (k === ',' || k === '<' ? -FRAME : FRAME)); updateUrlSoon();
           break;
         }
         if (CAST.connected) { flash('Frame step is off while casting'); break; }
@@ -2544,7 +2565,7 @@
     if (!remoteReady() || p.playerState === 'IDLE') return;
     CAST.lastTime = p.currentTime || 0; CAST.timeKey = current.key; CAST.lastPaused = !!p.isPaused;
     renderCastTime();
-    updateUrl(false);
+    // t= follows the TV only when it pauses (IS_PAUSED_CHANGED below)
   }
   function initCast() {
     try {
