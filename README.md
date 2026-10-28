@@ -8,9 +8,21 @@ A single static page (`index.html`) for watching game film. It plays the HLS str
 - Or double-click `index.html` (works from `file://`, but Chrome may not offer casting there and YouTube refuses to play), or host it on any other static web host.
 - **https://film.origas.org/beta/** (`beta/`) is the test bed for upcoming changes.
 
+## The header
+
+While you watch, the header is a single slim bar: the game's name, date and source on the left (cut off with "…" when long; hover for the full text) and **Find a game** on the right. Notices and errors appear just under it.
+
+**Find a game** (or the **/** key) opens the finder, which also opens by itself when no game is loaded. It has one box, quick chips and the game list:
+
+- **The box:** paste a game link (see below) or type a school name, then press Enter or **Go**. A game link loads the game; anything else is a school search.
+- **Chips:** **Union games**, **Union YouTube**, and up to 4 recently opened schools or Hudl sites (× removes one from the recent list).
+- **The game list** opens under the chips.
+
+Picking or loading a game, pressing Escape, or clicking **Find a game** again folds the finder back to the slim bar. Clicking elsewhere on the page leaves it open. Reopening brings it back exactly as it was: box text, school, tab, sport, search, loaded pages and scroll position. The list's **Close** closes just the list.
+
 ## Load a game
 
-Paste any of these into the top box and press Enter:
+Paste any of these into the **Find a game** box and press Enter:
 
 - GPAC page: `https://www.gpacnetwork.com/mountmarty/?B=4679968`
 - BlueFrame share link: `...watch-live?bfplayvid=4209918`
@@ -20,25 +32,27 @@ Paste any of these into the top box and press Enter:
 - YouTube link: `watch?v=`, `youtu.be/`, `/live/`, `/shorts/`, `/embed/` (an `<iframe>` snippet works), with an optional `t=` or `start=`. A bare YouTube ID needs a prefix: `yt:VIDEOID`. Hudl links take priority.
 - A timestamp copied from **Copy link**, e.g. `4679968 @ 1:23:20`
 
+A bare number is treated as a broadcast ID. The box shows what it will do ("Load broadcast 4679968", "Play YouTube video …") before you press Enter.
+
 The header shows the game's name, date and source, e.g. `Mount Marty vs Union · Oct 26, 2026, 5:00 PM · Hudl (mountmarty)`, and so does the browser tab title. Hudl dates and times come from the broadcast, in your time zone. YouTube gives no date, so the viewer uses a date written in the video title. If there isn't one and the video was picked from a channel list, it shows an approximate date from "Streamed 3d ago", marked with `~`. Otherwise no date is shown.
 
 ## Find a game
 
 ### School search
 
-Type in the **School** box. Matches come from a built-in directory of 229 schools (Union Adventist, its opponents and their opponents). Case and punctuation don't matter. Partial words, word starts and initials all match, e.g. `Bellevue`, `neb wes`, `occ` (Ozark Christian College) and `Ozark`. Union and its opponents are listed first. Each result shows the state and badges: **Hudl** (or Hudl stale/none), **YouTube**, or another platform.
+Type a school name in the **Find a game** box. Matches come from a built-in directory of 229 schools (Union Adventist, its opponents and their opponents). Case and punctuation don't matter. Partial words, word starts and initials all match, e.g. `Bellevue`, `neb wes`, `occ` (Ozark Christian College) and `Ozark`. Union and its opponents are listed first. Each result shows the state and badges: **Hudl** (or Hudl stale/none), **YouTube**, or another platform.
 
 - Pick a school with a Hudl site to open its game list.
 - If it has a YouTube channel, a **YouTube** button switches to its recent videos (and **Hudl games** switches back).
 - If a school isn't in the directory, the box searches Hudl's own list of sites, so any school on Hudl can still be found. **Search all Hudl schools for "…"** at the end of the list does the same on demand.
 
-You can also type a Hudl site name in **Hudl site** and press **Browse** (e.g. `mountmarty`, `occambassadors`; for GPAC it's the part after `gpacnetwork.com/`). The last one is remembered.
+A Hudl site's list can also be opened with a link: `?site=<slug>` (e.g. `mountmarty`, `occambassadors`; for GPAC it's the part after `gpacnetwork.com/`), or by pasting a GPAC school page into the box.
 
 The directory is generated from `directory/schools.json` by `directory/export_viewer.py`, which inlines it into the page between `/*SCHOOLS-START*/` and `/*SCHOOLS-END*/`. Run `python -I directory/export_viewer.py` for `beta/index.html` (the default), `--main` for this page, or give a path.
 
 ### Union games
 
-**Union games** lists every Hudl game with "Union" in its title across Union's Hudl site and the Hudl sites of all of Union's opponents in the directory, newest first. **Union YouTube** shows Union's channel (@unionadventistlive).
+The **Union games** chip lists every Hudl game with "Union" in its title across Union's Hudl site and the Hudl sites of all of Union's opponents in the directory, newest first. The **Union YouTube** chip shows Union's channel (@unionadventistlive).
 
 ### Game lists
 
@@ -54,8 +68,6 @@ The list's search bar searches the school's **whole archive** on Hudl's server, 
 - The filters combine. **Clear** empties the search words and dates; the sport stays.
 
 Search only covers previous (archived) games, and only the title text. Games shared with the school by another site (for example the opponent's home broadcast) are included, as on the school's own page.
-
-**The list folds away.** Picking a game from a list folds the list so the video gets the space. **▾ Games: …** brings it back exactly as it was: same school, tab, sport, search, loaded pages and scroll position. The list's **Close** closes it fully.
 
 ### YouTube channel lists
 
@@ -74,7 +86,7 @@ The page looks up the stream URL for a broadcast ID through Hudl's own viewer en
 
 - `?src=<link or ID>&t=<seconds>` loads a game and starts there; `?site=<slug>` opens the school's game list.
 - **Address bar time:** when the page runs at its own URL (https://film.origas.org, a local file or another static host), the address bar's `t=` changes only while the game is paused (on pause, at the end, and after seeking or frame-stepping while paused), so it stays still and is easy to copy during playback. Reloading the page or going back to it resumes where you were, even mid-playback: the tab remembers the live position per game (sessionStorage). A link with its own `t=` always goes to that time.
-- **Copy link** copies a resume link at the live time. Inside an embedded frame (such as an artifact page) it copies a timestamp like `4679968 @ 1:23:20` instead; paste that into the box to resume.
+- **Copy link** copies a resume link at the live time. Inside an embedded frame (such as an artifact page) it copies a timestamp like `4679968 @ 1:23:20` instead; paste that into the **Find a game** box to resume.
 - **Bookmarks** are saved per game in this browser's localStorage (not synced between machines). Click a time to seek and type a note next to it.
 - **Sharing bookmarks:** the link icon in the bookmarks panel (**Copy link with bookmarks**) copies a link that opens this game with all your bookmarks, times and notes included. The bookmarks travel in the part of the link after `#`, which is never sent to a server. With no bookmarks it copies a plain link to the game at the current time. Opening such a link shows them under **Shared with you (not saved)**, separate from **My bookmarks**. Nothing is saved automatically, so a shared link can never overwrite anyone's own bookmarks. Use the save icon on a shared bookmark to add a copy to your bookmarks; it then shows as saved, and saving the same one twice doesn't duplicate it. The shared list stays while that game is loaded (a reload keeps it) and goes away when you load another game. A link with 30 typical bookmarks is about 500 characters.
 - **Panel size:** drag the left edge of the bookmarks/shortcuts panel to resize it (or focus the edge and use the arrow keys; double-click resets). The size is remembered. On narrow screens the panel sits below the video and isn't resizable.
@@ -107,5 +119,6 @@ Older (legacy) games are cast from their H.264 variant stream, because Hudl's le
 | M | Bookmark current time (type a note, Enter to finish) |
 | F | Fullscreen |
 | B | Hide / show the bookmarks and shortcuts panel (remembered; also the chevron button at the top of the panel) |
+| / | Open **Find a game** and put the cursor in its box |
 
 Shortcuts are ignored while you type in a text field. While casting they control the TV.
