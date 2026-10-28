@@ -409,7 +409,50 @@
       }
       return out;
     }
-    return { ID, parseT, parseLink, initialData, videos };
+    // ---- dates for YouTube videos (the IFrame API gives none) ----
+    const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    function mkDate(y, m, d, h, min) {
+      if (y < 100) y += 2000;
+      const dt = new Date(y, m - 1, d, h || 0, min || 0);
+      return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d && y >= 2000 && y <= 2100 ? dt : null;
+    }
+    // A date written in a title: "October 24, 2026", "Oct. 24 2026", "24 October 2026", "10/24/2026", "2026-10-24".
+    // -> Date (local midnight) or null.
+    function titleDate(t) {
+      t = String(t || '');
+      let m = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,\s*|\s+)(\d{4})\b/i.exec(t);
+      if (m) return mkDate(+m[3], MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1, +m[2]);
+      m = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?(?:\s*,\s*|\s+)(\d{4})\b/i.exec(t);
+      if (m) return mkDate(+m[3], MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()) + 1, +m[1]);
+      m = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(t);
+      if (m) return mkDate(+m[1], +m[2], +m[3]);
+      m = /(?:^|[^\d/])(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?![\d/])/.exec(t);
+      if (m) return mkDate(+m[3], +m[1], +m[2]);
+      return null;
+    }
+    // The list's text: "Scheduled for 10/31/26, 12:45 PM" is exact; "Streamed 3d ago", "2mo ago", "1 year ago" are
+    // relative, so they give { date, approx: 'day' | 'month' | 'year' } with only as much precision as they carry.
+    function listDate(text, now) {
+      text = String(text || ''); now = now || new Date();
+      let m = /(\d{1,2})\/(\d{1,2})\/(\d{2,4}),?\s+(\d{1,2}):(\d{2})\s*([AP]M)/i.exec(text);
+      if (m) {
+        let h = +m[4] % 12; if (/p/i.test(m[6])) h += 12;
+        const d = mkDate(+m[3], +m[1], +m[2], h, +m[5]);
+        return d ? { date: d, approx: '', time: true } : null;
+      }
+      m = /(\d+)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|wks?|w|months?|mos?|years?|yrs?|y)\s+ago\b/i.exec(text);
+      if (!m) return null;
+      const n = +m[1], u = m[2].toLowerCase(), d = new Date(now.getTime());
+      if (/^(s|sec)/.test(u) || u === 'm' || /^min/.test(u) || /^h/.test(u)) {
+        const ms = /^h/.test(u) ? 3600e3 : (/^(s|sec)/.test(u) ? 1e3 : 60e3);
+        return { date: new Date(now.getTime() - n * ms), approx: 'day' };
+      }
+      if (/^d/.test(u)) { d.setDate(d.getDate() - n); return { date: d, approx: 'day' }; }
+      if (/^w/.test(u)) { d.setDate(d.getDate() - 7 * n); return { date: d, approx: 'day' }; }
+      if (/^mo/.test(u)) { d.setMonth(d.getMonth() - n); return { date: d, approx: 'month' }; }
+      d.setFullYear(d.getFullYear() - n); return { date: d, approx: 'year' };
+    }
+    return { ID, parseT, parseLink, initialData, videos, titleDate, listDate };
   })();
   /* YT-PARSE-END */
 
@@ -732,7 +775,7 @@
     // The Hudl site box shows the playing game's school (not whatever was browsed or played before).
     if (/^[a-z0-9_-]{2,64}$/i.test(info.siteSlug || '')) siteInput.value = info.siteSlug.toLowerCase();
     start({ key: id, id, url: info.url, playUrl, type: info.type, input: text, title: info.title, date: info.date,
-            status: info.status, siteName: info.siteName, geoblocked: info.geoblocked }, startAt);
+            status: info.status, siteName: info.siteName, siteSlug: info.siteSlug, geoblocked: info.geoblocked }, startAt);
   }
 
   // Older archived games resolve to a vcloud.hudl.com master playlist that is served without CORS headers,
@@ -766,13 +809,32 @@
   }
 
   const BASE_TITLE = document.title;
+  // Header: "<game> · <date> · <source>". Hudl: the broadcast's date and start time (viewer's time zone) and
+  // "Hudl (site)". YouTube: gameDateLabel() picks a date written in the title, else an approximate one ("~")
+  // from the list's "Streamed 3d ago" text, else none. The tab title carries the name and date too.
+  function gameDateLabel(info) {
+    if (!info) return '';
+    if (info.yt) return info.dateLabel || '';
+    return info.date ? fmtDateTime(info.date) || fmtDate(info.date) : '';
+  }
+  function gameSource(info) {
+    if (!info) return '';
+    if (info.yt) return [info.school, 'YouTube'].filter(Boolean).join(' · ');
+    if (info.id) {
+      const slug = /^[a-z0-9_-]{2,64}$/i.test(info.siteSlug || '') ? info.siteSlug.toLowerCase() : '';
+      const st = info.status && !/^archiv/i.test(info.status) ? info.status : '';
+      return [slug ? `Hudl (${slug})` : 'Hudl', st].filter(Boolean).join(' · ');
+    }
+    return '';
+  }
   function showTitle(info) {
-    // The tab title follows the game too, so it never keeps the previous game's name.
-    document.title = info && info.title ? `${info.title} — ${BASE_TITLE}` : BASE_TITLE;
+    const when = gameDateLabel(info);
+    // The tab title follows the game too, so it never keeps the previous game's name or date.
+    document.title = info && info.title ? `${info.title}${when ? ' · ' + when : ''} — ${BASE_TITLE}` : BASE_TITLE;
     if (!info || !info.title) { gameTitleEl.style.display = 'none'; gameTitleEl.textContent = ''; return; }
-    gameTitleEl.textContent = info.title + (info.date ? ` — ${fmtDate(info.date)}` : '');
-    const sub = [info.siteName, info.status].filter(Boolean).join(' · ');
-    if (sub) { const sp = document.createElement('span'); sp.className = 'sub'; sp.textContent = sub; gameTitleEl.appendChild(sp); }
+    gameTitleEl.textContent = info.title;
+    const sub = [when, gameSource(info)].filter(Boolean).join(' · ');
+    if (sub) { const sp = document.createElement('span'); sp.className = 'sub'; sp.textContent = '· ' + sub; gameTitleEl.appendChild(sp); }
     gameTitleEl.style.display = 'block';
   }
 
@@ -836,7 +898,8 @@
     const hint = titleHint && titleHint.key === key ? titleHint : null;
     titleHint = null;
     current = { key, id: null, yt: id, url: null, type: 'youtube', input: `https://youtu.be/${id}`,
-                title: hint ? hint.title : '', siteName: hint ? hint.sub : 'YouTube' };
+                title: hint ? hint.title : '', school: hint ? hint.school : '', when: hint ? hint.when : '', whenAt: hint ? hint.at : 0 };
+    current.dateLabel = ytDateLabel(current);
     pendingStart = Math.max(0, Number(startAt) || 0);
     YTP.on = true; YTP.id = id; YTP.ready = false;
     video.hidden = true;
@@ -869,7 +932,7 @@
             try { player.playVideo(); } catch (e) {}
             if (!current.title) {
               let t = ''; try { t = (player.getVideoData() || {}).title || ''; } catch (e) {}
-              if (t) { current.title = String(t); showTitle(current); }
+              if (t) { current.title = String(t); current.dateLabel = ytDateLabel(current); showTitle(current); }
             }
             speedSel.value = '1';
             ytStatus();
@@ -908,6 +971,20 @@
     const d = Math.round(ytDuration());
     YTP.shownDur = d;
     setStatus(d > 0 ? `YouTube video - ${fmt(d)}` : 'YouTube video');
+  }
+  // A YouTube video's date: one written in its title, else (picked from a list) an approximate one from the list's
+  // "Streamed 3d ago" text marked "~", else nothing.
+  function ytDateLabel(info) {
+    const td = YtParse.titleDate(info.title);
+    if (td) return fmtDate(td);
+    const ld = info.when ? YtParse.listDate(info.when, info.whenAt ? new Date(info.whenAt) : new Date()) : null;
+    if (!ld) return '';
+    if (!ld.approx) return ld.time ? fmtDateTime(ld.date) : fmtDate(ld.date);
+    try {
+      if (ld.approx === 'year') return '~' + ld.date.getFullYear();
+      if (ld.approx === 'month') return '~' + ld.date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    } catch (e) {}
+    return '~' + fmtDate(ld.date);
   }
   function ytState() { try { return YTP.ready ? Number(YTP.player.getPlayerState()) : -1; } catch (e) { return -1; } }
   function ytRate() { try { return YTP.ready ? Number(YTP.player.getPlaybackRate()) || 1 : 1; } catch (e) { return 1; } }
@@ -1676,7 +1753,8 @@
     }
     if (el.dataset.yt && YtParse.ID.test(el.dataset.yt)) {
       const id = el.dataset.yt;
-      titleHint = { key: 'yt:' + id, title: el.dataset.title || '', sub: el.dataset.sub || 'YouTube' };
+      titleHint = { key: 'yt:' + id, title: el.dataset.title || '', school: el.dataset.school || '', when: el.dataset.when || '',
+                    at: Number(el.dataset.at) || 0 };
       srcInput.value = `https://youtu.be/${id}`;
       collapseChooser();
       loadFromInput(srcInput.value, 0);
@@ -1772,7 +1850,8 @@
   function ytItem(v, channelName) {
     const li = document.createElement('li');
     const btn = document.createElement('button');
-    btn.type = 'button'; btn.dataset.yt = v.id; btn.dataset.title = v.title; btn.dataset.sub = channelName ? `${channelName} · YouTube` : 'YouTube';
+    btn.type = 'button'; btn.dataset.yt = v.id; btn.dataset.title = v.title; btn.dataset.school = channelName || '';
+    btn.dataset.when = v.when || ''; btn.dataset.at = String(Date.now()); // "3d ago" is relative to when the list loaded
     const im = document.createElement('img');
     im.loading = 'lazy'; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
     im.onerror = () => { im.style.visibility = 'hidden'; };
