@@ -1240,13 +1240,47 @@
       } // else: playing, so leave whatever t= the address bar already shows
       const next = `${location.pathname}?${params.toString()}${sharedHash}`; // keeps #bm= while shared
       if (next !== location.pathname + location.search + location.hash) history.replaceState(null, '', next);
+      // What this tab's address bar says, for the reload check. A reload uses the address from *before* the
+      // unload-time write, while back/forward uses the one after it, so the unload write is kept separately.
+      if (final) current.urlFinalT = params.get('t') || '';
+      else { current.urlT = params.get('t') || ''; current.urlFinalT = null; }
+      savePos();
     } catch (e) {}
+  }
+  // ---- resume the live position on reload / back ----
+  // The address bar only holds the last paused time, so this tab also keeps the live time per game in
+  // sessionStorage: { t: live seconds, urlT: the t= this tab last wrote }. On load it's used only for a reload or
+  // back/forward of our own page (same game, and the URL's t= is exactly what we last wrote); a pasted or shared
+  // link with its own t= always wins.
+  const POS_PREFIX = 'hudl-film-viewer:pos:';
+  function savePos() {
+    if (!current || !current.key || current.urlT == null) return;
+    const t = CAST.connected && !YTP.on ? remoteTime() : (pendingStart || localTime());
+    if (!isFinite(t) || t < 0) return;
+    try {
+      sessionStorage.setItem(POS_PREFIX + current.key, JSON.stringify({ t: Math.round(t * 10) / 10, urlT: current.urlT, urlFinalT: current.urlFinalT }));
+    } catch (e) {}
+  }
+  setInterval(() => { if (isPlaying()) savePos(); }, 3000);
+  function resumeTime(srcRaw, urlT) {
+    try {
+      const nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
+      if (!nav || (nav.type !== 'reload' && nav.type !== 'back_forward')) return null;
+      const p = parseInput(srcRaw);
+      const key = !p || p.none ? null : p.yt ? 'yt:' + p.yt : p.url ? 'url:' + p.url.split('?')[0] : p.id;
+      if (!key) return null;
+      const e = JSON.parse(sessionStorage.getItem(POS_PREFIX + key) || 'null');
+      const u = String(urlT || '');
+      if (!e || typeof e.t !== 'number' || !isFinite(e.t) || e.t < 0) return null;
+      if (String(e.urlT) !== u && (e.urlFinalT == null || String(e.urlFinalT) !== u)) return null; // someone else's t=
+      return e.t;
+    } catch (e) { return null; }
   }
   let urlTimer = 0;
   function updateUrlSoon() { clearTimeout(urlTimer); urlTimer = setTimeout(() => updateUrl(true), 400); } // debounced (held arrow keys)
   // Leaving or reloading: write the live time once. Chrome fixes a reload's URL before pagehide fires, so
   // beforeunload (which runs earlier) does the work for reloads; pagehide covers the remaining cases (e.g. bfcache).
-  const writeFinalTime = () => { clearTimeout(urlTimer); updateUrl(true, true); };
+  const writeFinalTime = () => { clearTimeout(urlTimer); updateUrl(true, true); savePos(); };
   window.addEventListener('beforeunload', writeFinalTime);
   window.addEventListener('pagehide', writeFinalTime);
   function shareRef() { return (current && (current.id || current.input || current.url)) || ''; }
@@ -1271,7 +1305,7 @@
   }
   video.addEventListener('timeupdate', () => { if (CAST.connected) return; osd.textContent = osdText(); });
   video.addEventListener('seeked', () => { if (!CAST.connected) updateUrlSoon(); }); // a seek while paused updates t=
-  video.addEventListener('pause', () => updateUrl(true));
+  video.addEventListener('pause', () => { updateUrl(true); savePos(); });
   video.addEventListener('ended', () => updateUrl(true));
   $('copyLink').addEventListener('click', async () => {
     if (!current) { flash('Load a game first'); return; }
@@ -2680,7 +2714,8 @@
     srcInput.value = qs.get('src');
     // Decode any shared bookmarks (#bm=) first so they attach to this game.
     readSharedFragment().then(() => {
-      const p = loadFromInput(qs.get('src'), Number(qs.get('t')) || 0);
+      const live = resumeTime(qs.get('src'), qs.get('t')); // reload / back of our own page: the live position
+      const p = loadFromInput(qs.get('src'), live != null ? live : (Number(qs.get('t')) || 0));
       if (sharedError) { // keep the game's own notices; show ours once loading has settled
         const keep = sharedError;
         Promise.resolve(p).then(() => { if (!noticeEl.innerHTML) { sharedError = keep; showSharedError(); } });

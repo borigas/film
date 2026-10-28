@@ -8,7 +8,7 @@ Every Hudl game list (Browse, a picked school, Union games, `?site=` links) open
 
 ## Address bar time
 
-The `t=` in the address bar changes only while the game is paused (on pause, at the end, and after seeking or frame-stepping while paused), so it stays still and is easy to copy during playback. **Copy link** and the link icon always use the live time. Going back to the page resumes where you left off; a reload during playback resumes from the last paused time.
+The `t=` in the address bar changes only while the game is paused (on pause, at the end, and after seeking or frame-stepping while paused), so it stays still and is easy to copy during playback. **Copy link** and the link icon always use the live time. Reloading the page or going back to it resumes where you were, even mid-playback: this tab remembers the live position per game (sessionStorage). A link with its own `t=` (pasted or shared) always goes to that time.
 
 ## Game date
 
