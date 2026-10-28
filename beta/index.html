@@ -1,0 +1,2224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Film Viewer (beta)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.20/hls.min.js"></script>
+<script>window.Hls || document.write('<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"><\/script>');</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eef0f3; --panel: #ffffff; --panel2: #f3f5f8; --border: #d5d9e0;
+    --text: #15181d; --muted: #5b6472; --accent: #1f6fe0; --accent-text: #ffffff;
+    --warn: #9a5b00; --warn-bg: #fff5e0; --err: #c62828; --live: #d32f2f;
+    --stage: #000000; --overlay: rgba(0,0,0,.65); --overlay-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0e1013; --panel: #171a1f; --panel2: #1e222a; --border: #2a2f39;
+      --text: #e6e8eb; --muted: #8b93a1; --accent: #4f9cff; --accent-text: #ffffff;
+      --warn: #ffb347; --warn-bg: #2a2416; --err: #ff6b6b; --live: #ff5252;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1013; --panel: #171a1f; --panel2: #1e222a; --border: #2a2f39;
+    --text: #e6e8eb; --muted: #8b93a1; --accent: #4f9cff; --accent-text: #ffffff;
+    --warn: #ffb347; --warn-bg: #2a2416; --err: #ff6b6b; --live: #ff5252;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: var(--panel);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0 8px 0 0; white-space: nowrap; }
+  .row { display: flex; gap: 8px; align-items: center; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
+  .row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  input[type=text] { flex: 1 1 220px; min-width: 0; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 14px; }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #site { flex: 0 1 200px; }
+  button, select { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }
+  #notice { display: none; margin: 10px 16px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 8px;
+    background: var(--warn-bg); overflow-wrap: anywhere; }
+  #notice.err { border-color: var(--err); }
+  #notice code { background: var(--panel2); padding: 1px 4px; border-radius: 3px; }
+  #notice ul { margin: 6px 0 0; padding-left: 20px; }
+  /* browse */
+  #browse { display: none; margin: 0; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+    max-height: 55vh; overflow: auto; }
+  #browse.open { display: block; }
+  #browse h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 6px; }
+  #browse h3:first-child { margin-top: 0; }
+  .bhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  [hidden] { display: none !important; }
+  .bsearch { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0 2px; padding: 6px 0;
+    position: sticky; top: -10px; z-index: 1; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .bsearch input[type=search] { flex: 1 1 220px; min-width: 0; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 14px; }
+  .bsearch input:focus, .bsearch select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .bsearch select { max-width: 100%; min-width: 0; }
+  .bsearch label { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); min-width: 0; }
+  .bsearch input[type=date] { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 6px; font: inherit; font-size: 13px; min-width: 0; max-width: 150px; }
+  .bstat { margin: 8px 0 6px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .bstat strong { color: var(--text); }
+  .bstat.err { color: var(--err); }
+  .games { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+  .games button { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 6px; }
+  .games img { width: 88px; height: 50px; object-fit: cover; border-radius: 4px; background: var(--stage); flex: none; }
+  .games .gt { min-width: 0; flex: 1; }
+  .games .gname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .games .gsub { font-size: 12px; color: var(--muted); }
+  .badge { display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.live { border-color: var(--live); color: var(--live); font-weight: 600; }
+  .badge.on { border-color: var(--accent); color: var(--accent); }
+  .badge.stale { border-color: var(--warn); color: var(--warn); }
+  .badge.off { text-decoration: line-through; }
+  /* school search (typeahead) */
+  #schoolBox { position: relative; flex: 1 1 260px; min-width: 0; display: flex; }
+  #school { flex: 1 1 auto; }
+  #schoolList { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 20; margin: 0; padding: 4px 0; list-style: none;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    max-height: min(60vh, 420px); overflow: auto; }
+  #schoolList li { padding: 6px 10px; cursor: pointer; display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; }
+  #schoolList li.sel, #schoolList li:hover { background: var(--panel2); }
+  #schoolList li.sel { outline: 1px solid var(--accent); outline-offset: -1px; }
+  #schoolList .sn { font-weight: 600; overflow-wrap: anywhere; }
+  #schoolList .ss { color: var(--muted); font-size: 12px; }
+  #schoolList .sb { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  #schoolList li.hdr { cursor: default; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 8px; }
+  #schoolList li.hdr:hover { background: none; }
+  #schoolList li.msg { cursor: default; color: var(--muted); font-size: 13px; }
+  #schoolList li.msg:hover { background: none; }
+  .srctabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 8px 0 2px; }
+  .srctabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .srctabs .small { margin-left: 4px; }
+  #ytHost { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 150px); border: 0; background: var(--stage); }
+  main { flex: 1; display: flex; min-height: 0; }
+  #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #gameTitle { padding: 6px 16px; font-weight: 600; background: var(--panel); border-bottom: 1px solid var(--border); display: none;
+    overflow-wrap: anywhere; }
+  #gameTitle .sub { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  #videoWrap { position: relative; flex: 1; background: var(--stage); display: flex; align-items: center; justify-content: center; min-height: 200px; }
+  video { width: 100%; height: 100%; max-height: calc(100vh - 150px); background: var(--stage); display: block; }
+  #osd { position: absolute; top: 10px; right: 12px; background: var(--overlay); color: var(--overlay-text); padding: 4px 9px; border-radius: 5px;
+    font-variant-numeric: tabular-nums; font-size: 13px; pointer-events: none; transition: opacity .3s; }
+  #flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--overlay); color: var(--overlay-text);
+    padding: 10px 16px; border-radius: 8px; font-size: 18px; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  #bar { display: flex; gap: 8px; align-items: center; padding: 6px 16px; background: var(--panel); border-top: 1px solid var(--border);
+    flex-wrap: wrap; font-size: 13px; }
+  #bar .spacer { flex: 1; }
+  #status { color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+  #status.err { color: var(--err); }
+  #status.warn { color: var(--warn); }
+  aside { width: 300px; flex: 0 0 300px; background: var(--panel); border-left: 1px solid var(--border); display: flex;
+    flex-direction: column; min-height: 0; }
+  aside section { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px;
+    display: flex; justify-content: space-between; align-items: center; }
+  /* collapsible panel: the toggle row stays visible; collapsed it is a slim strip (wide) or a single row (narrow) */
+  #panelToggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 16px; border: none;
+    border-bottom: 1px solid var(--border); border-radius: 0; background: var(--panel); color: var(--muted); font-size: 12px;
+    text-transform: uppercase; letter-spacing: .06em; text-align: left; flex: none; }
+  #panelToggle:hover { color: var(--text); background: var(--panel2); border-color: var(--border); }
+  #panelToggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #panelToggle .plbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #panelToggle svg { width: 16px; height: 16px; fill: currentColor; flex: none; transition: transform .15s; }
+  #panelBody { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  aside.collapsed { width: 36px; flex-basis: 36px; }
+  aside.collapsed #panelToggle { flex: 1; flex-direction: column; justify-content: flex-start; gap: 10px; padding: 10px 0; border-bottom: none; }
+  aside.collapsed #panelToggle .plbl { flex: none; writing-mode: vertical-rl; }
+  aside.collapsed #panelToggle svg { transform: rotate(180deg); }
+  #bmSection { flex: 1; overflow: auto; min-height: 120px; }
+  #bmList { list-style: none; margin: 0; padding: 0; }
+  #bmList li { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  #bmList .t { font-variant-numeric: tabular-nums; color: var(--accent); background: none; border: none; padding: 2px 4px; }
+  #bmList input { flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; color: var(--text); padding: 3px 5px; border-radius: 4px; }
+  #bmList input:focus { border-color: var(--accent); outline: none; background: var(--panel2); }
+  #bmList .del { background: none; border: none; color: var(--muted); padding: 2px 6px; }
+  #bmList .del:hover { color: var(--err); }
+  .empty { color: var(--muted); font-size: 13px; }
+  #legend { font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+  kbd { background: var(--panel2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
+    font: 11px ui-monospace, Consolas, monospace; white-space: nowrap; }
+  .small { font-size: 12px; color: var(--muted); }
+  /* casting */
+  #castBtn { display: inline-flex; gap: 6px; align-items: center; }
+  #castBtn svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+  #castBtn.on { color: var(--accent); border-color: var(--accent); }
+  #castHelp { font-size: 12px; color: var(--muted); min-width: 0; }
+  #castHelp summary { cursor: pointer; list-style: none; white-space: nowrap; }
+  #castHelp summary::-webkit-details-marker { display: none; }
+  #castHelp[open] { flex: 1 1 100%; order: 10; overflow-wrap: anywhere; }
+  #castHelp[open] summary { display: inline; margin-right: 6px; }
+  #castOverlay { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); max-width: calc(100% - 32px);
+    background: var(--overlay); color: var(--overlay-text); padding: 10px 16px; border-radius: 8px; text-align: center;
+    pointer-events: none; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  #castOverlay .cdev { font-weight: 600; }
+  #castOverlay .cstate { font-size: 13px; opacity: .9; }
+  @media (max-width: 860px) {
+    main { flex-direction: column; }
+    aside { width: auto; flex: none; border-left: none; border-top: 1px solid var(--border); }
+    video, #ytHost { max-height: 60vh; }
+    #bmSection { max-height: 40vh; }
+    #panelToggle svg { transform: rotate(90deg); }
+    aside.collapsed { width: auto; }
+    aside.collapsed #panelToggle { flex-direction: row; justify-content: flex-start; gap: 6px; padding: 8px 16px; }
+    aside.collapsed #panelToggle .plbl { flex: 1; writing-mode: horizontal-tb; }
+    aside.collapsed #panelToggle svg { transform: rotate(-90deg); }
+  }
+  @media (max-width: 480px) {
+    header h1 { flex: 1 1 100%; }
+    #site { flex: 1 1 140px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Game Film Viewer <span class="badge">beta</span></h1>
+  <div class="row">
+    <input id="src" type="text" spellcheck="false" autocomplete="off"
+           placeholder="Paste a game link, embed code, broadcast ID, .m3u8 URL, or YouTube link" aria-label="Game link">
+    <button id="loadBtn" class="primary">Load</button>
+  </div>
+  <div class="row">
+    <label for="school">School</label>
+    <div id="schoolBox">
+      <input id="school" type="text" spellcheck="false" autocomplete="off" placeholder="Search schools, e.g. Bellevue, neb wes, occ"
+             aria-label="Search schools" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="schoolList">
+      <ul id="schoolList" role="listbox" aria-label="Matching schools" hidden></ul>
+    </div>
+    <button id="unionBtn" type="button" title="Union Adventist games on Union's and its opponents' Hudl sites, plus Union's YouTube">Union games</button>
+    <label for="site">Hudl site</label>
+    <input id="site" type="text" spellcheck="false" autocomplete="off" placeholder="e.g. mountmarty" aria-label="School site slug">
+    <button id="browseBtn">Browse</button>
+  </div>
+</header>
+
+<div id="notice" role="status"></div>
+<div id="browse" aria-label="School games"></div>
+
+<main>
+  <div id="stage">
+    <div id="gameTitle"></div>
+    <div id="videoWrap">
+      <video id="video" controls playsinline preload="auto"></video>
+      <div id="osd">1.00x</div>
+      <div id="castOverlay" hidden><div class="cdev"></div><div class="cstate"></div></div>
+      <div id="flash"></div>
+    </div>
+    <div id="bar">
+      <span id="status">Paste a game link and press Load, or browse a school's games.</span>
+      <span class="spacer"></span>
+      <label id="qualityLbl">Quality <select id="quality" disabled><option value="-1">Auto</option></select></label>
+      <label>Speed <select id="speed"></select></label>
+      <button id="castBtn" type="button" hidden title="Cast to a Chromecast / Google TV"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><span>Cast</span></button>
+      <details id="castHelp" hidden><summary title="Why is there no Cast button?">Cast?</summary><span></span></details>
+      <button id="copyLink" title="Copy a link (or a timestamp) that resumes at the current time">Copy link</button>
+    </div>
+  </div>
+  <aside id="panel">
+    <button id="panelToggle" type="button" aria-expanded="true" aria-controls="panelBody" title="Hide panel (B)"><span class="plbl">Hide panel</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></button>
+    <div id="panelBody">
+    <section id="bmSection">
+      <h2>Bookmarks <span>
+        <button id="addBm" title="Mark current time (M)">+ Mark</button>
+        <button id="exportBm" title="Download bookmarks as text">Export</button>
+      </span></h2>
+      <ul id="bmList"></ul>
+      <div id="bmEmpty" class="empty">Press <kbd>M</kbd> to mark the current time.</div>
+    </section>
+    <section>
+      <h2>Shortcuts</h2>
+      <div id="legend">
+        <span><kbd>Space</kbd></span><span>Play / pause</span>
+        <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd></span><span>Back / forward 5s</span>
+        <span><kbd>J</kbd> <kbd>K</kbd></span><span>Back / forward 10s</span>
+        <span><kbd>Shift</kbd>+<kbd>&larr;</kbd><kbd>&rarr;</kbd></span><span>Back / forward 30s</span>
+        <span><kbd>,</kbd> <kbd>.</kbd></span><span>Frame step (pauses; off while casting; approximate on YouTube)</span>
+        <span><kbd>&darr;</kbd> <kbd>&uarr;</kbd></span><span>Slower / faster (also <kbd>[</kbd> <kbd>]</kbd>)</span>
+        <span><kbd>\</kbd></span><span>Reset speed to 1x</span>
+        <span><kbd>0</kbd>&ndash;<kbd>9</kbd></span><span>Jump to 0&ndash;90%</span>
+        <span><kbd>M</kbd></span><span>Add bookmark</span>
+        <span><kbd>F</kbd></span><span>Fullscreen</span>
+        <span><kbd>B</kbd></span><span>Hide / show this panel</span>
+      </div>
+      <div class="small" style="margin-top:6px">YouTube: after clicking inside the YouTube player, its own keys apply; click outside it to use these.</div>
+    </section>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const video = $('video'), srcInput = $('src'), statusEl = $('status'), osd = $('osd'), flashEl = $('flash');
+  const qualitySel = $('quality'), speedSel = $('speed'), noticeEl = $('notice'), browseEl = $('browse');
+  const siteInput = $('site'), gameTitleEl = $('gameTitle');
+  const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const FRAME = 1 / 30;
+  const HUDL = 'https://vcloud.hudl.com';
+  const LS_SITE = 'hudl-film-viewer:lastSite';
+  const LS_PANEL = 'hudl-film-viewer:panelCollapsed';
+
+  // School directory (generated by directory/export_viewer.py; do not edit by hand).
+  // n name, a aliases, s state, l level (0 Union, 1 Union's opponents, 2 theirs),
+  // h [hudlSlug, active|stale|none, lastGame] | 0, y [youtubeChannelId, handle] | 0, o other platform text.
+  const SCHOOLS = /*SCHOOLS-START*/[{"n":"Union Adventist University","a":["Union Adventist"],"s":"NE","l":0,"h":["unionadventist","stale","2025-04-13"],"y":["UC-abuN7J1DZH8KOCboQhlbA","@unionadventistlive"],"o":"YouTube"},{"n":"Andrews University","a":["Andrews"],"s":"MI","l":1,"h":["andrewsu","active","2026-09-03"],"y":0,"o":""},{"n":"Barclay College","a":["Barclay"],"s":"KS","l":1,"h":["barclaybears","stale","2025-02-11"],"y":["UC-aFzOQ7MHwIoZnaoFuQRuA","@BarclayCollege"],"o":"YouTube"},{"n":"Bellevue University","a":["Bellevue (NE)"],"s":"NE","l":1,"h":["bellevuebruins","active","2026-10-12"],"y":["UCx6CBRTunGun0HMu8ZDwZHg","@BellevueBruins"],"o":""},{"n":"Calvary University","a":["Calvary Bible"],"s":"MO","l":1,"h":["calvarywarriors","active","2026-10-24"],"y":["UClk1ATV3RmgdqT0R0SiOtdg","@CalvaryUniversity"],"o":""},{"n":"Central Bible University","a":["Central Bible (Mo.)","Central Christian (Mo.)","Central Christian College of the BIble","Central Christian College of the Bible"],"s":"MO","l":1,"h":["cbusaints","stale","2025-05-03"],"y":["UCMFXu0NX8Ct9absXID-dQzA","@CBUSaints"],"o":"YouTube"},{"n":"Doane University","a":["Doane"],"s":"NE","l":1,"h":["doane","active","2026-10-25"],"y":["UCo0MjKmRtvBiYCt1ABRUa5A","@doaneathletics"],"o":""},{"n":"Emmaus University","a":["Emmaus","Emmaus Bible College"],"s":"IA","l":1,"h":["emmauseagles","active","2026-10-24"],"y":["UCxoKjEWMyOZ8WOrqAiiKWTw","@emmausuniversityeagles"],"o":""},{"n":"Faith Baptist Bible College","a":["Faith Bapt. Bible","Faith Baptist Bible","Faith Baptist Bible Athletics","Faith Baptist University"],"s":"IA","l":1,"h":["fbbceagles","active","2026-10-27"],"y":["UCErIhQPDEE6VZ-a6AC1xHYw","@FaithEagles"],"o":""},{"n":"Kansas Christian College","a":[],"s":"KS","l":1,"h":0,"y":["UCUXGLqNpJ25Whuchg6jIJ9Q","@KCCAthletics1"],"o":"YouTube"},{"n":"Manhattan Christian College","a":["Manhattan Christian","Manhattan Chrst."],"s":"KS","l":1,"h":["manhattanchristian","none",""],"y":["UCAIeAHTdinqzlTEMbqH00RQ","@manhattanchristiancollege1415"],"o":"YouTube"},{"n":"Mount Marty University","a":["Mount Marty","Mt. Marty"],"s":"SD","l":1,"h":["mountmarty","active","2026-10-27"],"y":0,"o":""},{"n":"Nebraska Wesleyan University","a":["Nebraska Wesleyan"],"s":"NE","l":1,"h":["nebwesleyan","active","2026-10-28"],"y":["UClPVBbSKi2tjY5R7d4sXiJA","@NebraskaWesleyanAthletics"],"o":""},{"n":"Ozark Christian College","a":["Ozark Christian"],"s":"MO","l":1,"h":["occambassadors","active","2026-10-24"],"y":["UCa8qtjH_rX-Q8Dk4W5Kk01A","@ozarkchristiancollegeathle4283"],"o":""},{"n":"Peru State College","a":["Peru St.","Peru State"],"s":"NE","l":1,"h":["peru","active","2026-10-24"],"y":0,"o":""},{"n":"Southwestern Adventist University","a":["Southwestern Adventist"],"s":"TX","l":1,"h":0,"y":["UCmdxfTGqzRPWiQRpUYV2Gcg","@swauknights"],"o":""},{"n":"Spurgeon College","a":[],"s":"MO","l":1,"h":["spurgeon","active","2026-10-27"],"y":["UCQbtO8skuDqcmQv0E4k3gUA","@knightsathletics5832"],"o":""},{"n":"Trinity Bible College","a":["Trinity Bible (N.D.)"],"s":"ND","l":1,"h":0,"y":0,"o":"YouTube"},{"n":"York University","a":["York (NE)","York (Neb.)","York University (Neb.)"],"s":"NE","l":1,"h":["york","active","2026-10-28"],"y":0,"o":""},{"n":"Abilene Christian University","a":["Abilene Christian"],"s":"TX","l":2,"h":["abilene","active","2026-05-10"],"y":0,"o":""},{"n":"Alverno College","a":[],"s":"WI","l":2,"h":["alverno","active","2026-10-20"],"y":0,"o":""},{"n":"Ancilla College","a":[],"s":"IN","l":2,"h":["org-47438","none",""],"y":0,"o":""},{"n":"Arizona Christian University","a":[],"s":"AZ","l":2,"h":["azchristian","active","2026-10-18"],"y":["UCEZWf1NQOkZkMm8wVmB9Fbg","@acufirestormathletics6545"],"o":""},{"n":"Arlington Baptist University","a":["Arlington Baptist"],"s":"TX","l":2,"h":["abupatriots","active","2026-10-27"],"y":0,"o":""},{"n":"Augustana University","a":["Augustana (S.D.)"],"s":"SD","l":2,"h":["goaugie","active","2026-10-25"],"y":0,"o":""},{"n":"Aurora University","a":[],"s":"IL","l":2,"h":["auroraathletics","active","2026-05-16"],"y":0,"o":""},{"n":"Avila University","a":["Avila","Avila College"],"s":"MO","l":2,"h":["avila","active","2026-10-28"],"y":0,"o":""},{"n":"Baker University","a":["Baker","Baker University (Kan.)"],"s":"KS","l":2,"h":["baker","active","2026-10-27"],"y":["UCHmpqFz0lzg9AGQrHUbVeNg","@TheBakerSID"],"o":""},{"n":"Baptist University of Florida","a":[],"s":"FL","l":2,"h":["bufeagles","active","2026-10-24"],"y":["UCQ2tJOHilwpvZ8z2lXAXrwA","@BUFAthletics"],"o":""},{"n":"Benedictine College","a":["Benedictine (Kan.)","Benedictine College (Kan.)"],"s":"KS","l":2,"h":["benedictine-college","active","2026-10-27"],"y":["UCP1jlA7XnFGK2lijWWTC1Qw","@BCRavenAthletics"],"o":""},{"n":"Bethany College","a":["Bethany","Bethany (KS)","Bethany College (Kan.)"],"s":"KS","l":2,"h":["bethanyks","active","2026-10-25"],"y":["UCtGRtj4gf2BsQXi4k4OmaRA","@BethanyCollegelbk"],"o":""},{"n":"Bethel College","a":["Bethel College (KS)","Bethel College (Kan.)"],"s":"KS","l":2,"h":["bethel","active","2026-10-26"],"y":["UC0kE6BxUKLYmDx1NAgHVCEw","@bethelcollegeathletics8267"],"o":""},{"n":"Bismarck State College","a":["Bismarck State"],"s":"ND","l":2,"h":["gomystics","active","2026-08-29"],"y":0,"o":""},{"n":"Black Hills State University","a":[],"s":"SD","l":2,"h":["bhsu","active","2026-10-28"],"y":["UCsbOWmkBD0hmqB-GfD2s-dw","@bhsuathletics2920"],"o":""},{"n":"Blackburn College","a":["Blackburn"],"s":"IL","l":2,"h":["blackburnbeavers","active","2026-10-27"],"y":0,"o":""},{"n":"Boyce College","a":[],"s":"KY","l":2,"h":["boyce","none",""],"y":0,"o":"YouTube"},{"n":"Briar Cliff University","a":["Briar Cliff (IA)","Briar Cliff University (Iowa)"],"s":"IA","l":2,"h":["bcuchargers","active","2026-10-27"],"y":0,"o":""},{"n":"Bryant & Stratton College (Buffalo)","a":["Bryant & Stratton (Buffalo)"],"s":"NY","l":2,"h":["bscnyb","active","2026-10-08"],"y":0,"o":""},{"n":"Buena Vista University","a":[],"s":"IA","l":2,"h":["buenavista","active","2026-10-28"],"y":["UCPWze9HbmAwbYiEZ9s6XIZg","@BVUAthletics"],"o":""},{"n":"California Institute of Technology","a":["Caltech"],"s":"CA","l":2,"h":["caltech","active","2026-02-28"],"y":["UCjdsXjsYXI9ms6TgJoN5piQ","@caltechbeavers"],"o":""},{"n":"Calumet College of St. Joseph","a":["Calumet College","Calumet College of St Joseph"],"s":"IN","l":2,"h":["ccsjcrimsonwave","active","2026-10-27"],"y":0,"o":""},{"n":"Canadian Mennonite University","a":[],"s":"MB","l":2,"h":0,"y":0,"o":""},{"n":"Cankdeska Cikana Community College","a":["Candeska Community College"],"s":"ND","l":2,"h":0,"y":0,"o":""},{"n":"Carroll College","a":["Carroll"],"s":"MT","l":2,"h":["carrollcollege","active","2026-10-09"],"y":0,"o":""},{"n":"Central Christian College of Kansas","a":["Central Christian College (Kan.)"],"s":"KS","l":2,"h":["centralchristian","active","2026-10-28"],"y":["UCelqZ37sRMBLGSTUuSi1Rmw","@CCCTigerAthletics"],"o":""},{"n":"Central College","a":[],"s":"IA","l":2,"h":["centraldutchsports","active","2026-10-27"],"y":["UCKZT_0g2nkHBbL3qIDlNpQA","@CentralAthletics"],"o":""},{"n":"Central Community College","a":["Central CC"],"s":"NE","l":2,"h":["cccraiders","active","2026-10-22"],"y":0,"o":""},{"n":"Central Methodist University","a":["Central Methodist","Central Methodist University (Mo.)"],"s":"MO","l":2,"h":["cmu","active","2026-10-24"],"y":0,"o":""},{"n":"Champion Christian College","a":["Champion Baptist College","Champion Christian"],"s":"AR","l":2,"h":0,"y":0,"o":""},{"n":"Clark State College","a":["Clark State Community College"],"s":"OH","l":2,"h":["cscceagles","active","2026-10-26"],"y":0,"o":""},{"n":"Clarke University","a":["Clarke","Clarke (IA)"],"s":"IA","l":2,"h":["clarke","active","2026-10-28"],"y":0,"o":""},{"n":"Coe College","a":[],"s":"IA","l":2,"h":["coe","active","2026-10-27"],"y":["UCDf67a5D_QaJRDgZVb81eZQ","@CoeCollegeAthletics"],"o":""},{"n":"College of Biblical Studies","a":[],"s":"TX","l":2,"h":0,"y":0,"o":""},{"n":"College of Saint Benedict","a":[],"s":"MN","l":2,"h":["saintbenedict","active","2026-10-24"],"y":["UC2R9DlKTqKlbeqHtF8vlo9A","@CSBathletics"],"o":""},{"n":"College of Saint Mary","a":["College of Saint Mary (NE)","College of Saint Mary (Neb.)"],"s":"NE","l":2,"h":["collegeofsaintmary","active","2026-10-24"],"y":0,"o":""},{"n":"College of St. Scholastica","a":[],"s":"MN","l":2,"h":["stscholastica","active","2026-10-27"],"y":0,"o":""},{"n":"Colorado Christian University","a":["Colo. Christian"],"s":"CO","l":2,"h":["coloradochristian","active","2026-10-25"],"y":0,"o":""},{"n":"Colorado College","a":[],"s":"CO","l":2,"h":["coloradocollege","active","2026-05-16"],"y":0,"o":""},{"n":"Colorado State University Pueblo","a":["Colorado St.-Pueblo"],"s":"CO","l":2,"h":["gothunderwolves","active","2026-10-28"],"y":0,"o":""},{"n":"Columbia College","a":[],"s":"MO","l":2,"h":["columbiacougars","active","2026-10-28"],"y":0,"o":""},{"n":"Concordia College","a":["Concordia College (Minn.)"],"s":"MN","l":2,"h":["concordia","active","2026-10-24"],"y":0,"o":""},{"n":"Concordia University Nebraska","a":["Concordia (NE)","Concordia (Neb.)","Concordia University (Neb.)"],"s":"NE","l":2,"h":["cune","active","2026-10-24"],"y":["UCVbZt_MRMI0fqKrM8U5a2zQ","@ConcordiaBulldogs"],"o":""},{"n":"Cornell College","a":[],"s":"IA","l":2,"h":["cornellcollegeathletics","active","2026-10-20"],"y":0,"o":""},{"n":"Cottey College","a":["Cottey"],"s":"MO","l":2,"h":["cottey","active","2026-10-27"],"y":0,"o":""},{"n":"Crown College","a":["Crown (Minn.)"],"s":"MN","l":2,"h":["crownpolars","active","2026-10-24"],"y":["UCI7zDWvHcR0T4aQJL9mZGkA","@crowncollegepolars"],"o":""},{"n":"Culver-Stockton College","a":["Culver-Stockton College (Mo.)"],"s":"MO","l":2,"h":["culver-stockton","active","2026-10-27"],"y":["UCjtR5kvT3npMHQIWGzrQBRg","@culver-stocktoncollegeathl4711"],"o":""},{"n":"Dakota College at Bottineau","a":[],"s":"ND","l":2,"h":["dakotacollegebottineau","active","2026-10-24"],"y":0,"o":""},{"n":"Dakota State University","a":["Dakota St.","Dakota State"],"s":"SD","l":2,"h":["dsu","active","2026-10-20"],"y":["UCPNI9FQCA6RyI16r4Le8lAQ","@DakotaStateUniversityAthletics"],"o":""},{"n":"Dakota Wesleyan University","a":["Dakota Wesleyan (SD)"],"s":"SD","l":2,"h":["dakotawesleyan","active","2026-10-25"],"y":["UCRhcsSnwa7elu8Dgx0Tq1EA","@DWUTIGERS"],"o":""},{"n":"Dallas Christian College","a":["Dallas Christian"],"s":"TX","l":2,"h":["dcc","active","2026-10-24"],"y":0,"o":""},{"n":"Dallas College Cedar Valley","a":["Dallas College - Cedar Valley College"],"s":"TX","l":2,"h":["cedarvalleysuns","active","2026-10-22"],"y":0,"o":""},{"n":"Dallas College Mountain View","a":["Dallas College- Mountain View","Mountain View College"],"s":"TX","l":2,"h":["mountainviewlions","active","2026-10-22"],"y":0,"o":""},{"n":"Dickinson State University","a":["Dickinson State","Dickinson State (ND)"],"s":"ND","l":2,"h":0,"y":0,"o":""},{"n":"Dordt University","a":["Dordt (IA)","Dordt University (Iowa)"],"s":"IA","l":2,"h":["dordtuniv","active","2026-10-26"],"y":["UCYop65mCIh6CuGT3pUXArfQ","@dordtuniversitydefenderath9625"],"o":""},{"n":"Drury University","a":[],"s":"MO","l":2,"h":["drury","active","2026-10-27"],"y":0,"o":""},{"n":"East-West University","a":["East-West U."],"s":"IL","l":2,"h":0,"y":0,"o":""},{"n":"Ecclesia College","a":["Ecclesia","Ecclessia"],"s":"AR","l":2,"h":0,"y":["UCfvVBLmtMP5jMwwNuPRgWiA","@EcclesiaAthletics25"],"o":""},{"n":"Ellsworth Community College","a":["Ellsworth CC"],"s":"IA","l":2,"h":["gopanthers","active","2026-10-24"],"y":0,"o":""},{"n":"Emporia State University","a":["Emporia St.","Emporia State"],"s":"KS","l":2,"h":["esuhornets","active","2026-10-25"],"y":0,"o":""},{"n":"Evangel University","a":["Evangel (MO)"],"s":"MO","l":2,"h":["evangel","active","2026-10-28"],"y":0,"o":""},{"n":"Fort Hays State University","a":[],"s":"KS","l":2,"h":["fhsutigers","active","2026-10-25"],"y":0,"o":""},{"n":"Four Winds University","a":[],"s":"","l":2,"h":0,"y":0,"o":""},{"n":"Franklin College","a":[],"s":"IN","l":2,"h":["franklingrizzlies","active","2026-10-24"],"y":0,"o":""},{"n":"Free Lutheran Bible College","a":["Free Lutheran Bible School"],"s":"MN","l":2,"h":0,"y":0,"o":""},{"n":"Friends University","a":[],"s":"KS","l":2,"h":["friends","active","2026-10-28"],"y":["UC64P94DEvYw9jVjv4ovKLHw","@friendsuniversityathletics4022"],"o":""},{"n":"Georgetown College","a":["Georgetown College (Ky.)"],"s":"KY","l":2,"h":["georgetowntigers","active","2026-10-27"],"y":["UC62MWilK_2_nOeIvuJ5pNPg","@georgetowntigersathletics"],"o":""},{"n":"Glen Oaks Community College","a":[],"s":"MI","l":2,"h":["glenoaksvikings","active","2026-10-27"],"y":0,"o":""},{"n":"Grace Christian University","a":["Grace Bible College","Grace Christian (MI)","Grace Christian (Mich.)"],"s":"MI","l":2,"h":0,"y":0,"o":""},{"n":"Graceland University","a":["Graceland","Graceland (Iowa)","Graceland University (Iowa)"],"s":"IA","l":2,"h":["graceland","active","2026-10-28"],"y":0,"o":""},{"n":"Grand View University","a":["Grand View"],"s":"IA","l":2,"h":["grandviewvikings","active","2026-10-24"],"y":["UCUf_DAarKb4vWCpJ5j1TEbg","@GrandViewUniversityVideo"],"o":""},{"n":"Great Lakes Christian College","a":["Great Lakes Christian"],"s":"MI","l":2,"h":["glcc","active","2026-10-17"],"y":0,"o":""},{"n":"Greenville University","a":[],"s":"IL","l":2,"h":["greenvillepanthers","active","2026-10-24"],"y":["UCegTv-Akyn70llQkeKJPbXg","@GUPanthers"],"o":""},{"n":"Grinnell College","a":[],"s":"IA","l":2,"h":["grinnellpioneers","active","2026-10-24"],"y":["UCHNHA9IC966zwPITouPBDJg","@grinnellathletics"],"o":""},{"n":"Hannibal-LaGrange University","a":[],"s":"MO","l":2,"h":["hlgtrojans","stale","2023-08-30"],"y":0,"o":""},{"n":"Harris-Stowe State University","a":["Harris-Stowe"],"s":"MO","l":2,"h":["harris-stowe","active","2026-10-27"],"y":0,"o":""},{"n":"Haskell Indian Nations University","a":["Haskell"],"s":"KS","l":2,"h":["gohaskell","active","2026-10-27"],"y":["UCqUB14pLTW43z2nNpCGay4g","@HaskellAthleticsLive"],"o":""},{"n":"Hastings College","a":["Hastings","Hastings (NE)","Hastings College (Neb.)"],"s":"NE","l":2,"h":["hastingsbroncos","active","2026-10-25"],"y":["UCUPKH43zHCb92te5zpnN3cg","@HastingsBroncos"],"o":""},{"n":"Hesston College","a":[],"s":"KS","l":2,"h":["hesstoncollege","active","2026-10-27"],"y":0,"o":""},{"n":"Hillsdale College","a":[],"s":"MI","l":2,"h":["hillsdale","active","2026-10-02"],"y":0,"o":""},{"n":"Holy Cross College","a":["Holy Cross University"],"s":"IN","l":2,"h":["hcsaints","active","2026-10-27"],"y":0,"o":""},{"n":"Howard Payne University","a":[],"s":"TX","l":2,"h":["hpusports","active","2026-10-08"],"y":0,"o":""},{"n":"Huntington University","a":["Huntington"],"s":"IN","l":2,"h":["huforesters","active","2026-10-26"],"y":0,"o":""},{"n":"Indiana University Northwest","a":[],"s":"IN","l":2,"h":["iunw","none",""],"y":0,"o":""},{"n":"John Brown University","a":[],"s":"AR","l":2,"h":["jbu","active","2026-10-28"],"y":0,"o":""},{"n":"Kansas Wesleyan University","a":["Kansas Wesleyan"],"s":"KS","l":2,"h":["kansaswesleyan","active","2026-10-26"],"y":["UC7dU_-Jlk4f4tK482_S2obg","@kwucoyotes"],"o":""},{"n":"Kent State University at Tuscarawas","a":["Kent St-Tuscarawas","Kent St.-Tuscarawas"],"s":"OH","l":2,"h":["kentstatetuscarawas","active","2026-10-20"],"y":0,"o":""},{"n":"Kuyper College","a":["Kuyper"],"s":"MI","l":2,"h":0,"y":0,"o":""},{"n":"Langston University","a":[],"s":"OK","l":2,"h":["langston","active","2026-10-24"],"y":["UCsnD-v8SEggvmEFLpbv3hCw","@langstonuniversity2353"],"o":""},{"n":"Lincoln University","a":[],"s":"MO","l":2,"h":["lincolnbluetigers","active","2026-10-27"],"y":0,"o":""},{"n":"Lindenwood University","a":[],"s":"MO","l":2,"h":["lindenwooduniversityovc","active","2026-10-25"],"y":0,"o":""},{"n":"Loras College","a":[],"s":"IA","l":2,"h":["lorascollege","active","2026-10-24"],"y":0,"o":""},{"n":"Luther College","a":["Luther"],"s":"IA","l":2,"h":["luthernorse","active","2026-10-28"],"y":0,"o":""},{"n":"Madonna University","a":["Madonna"],"s":"MI","l":2,"h":["madonna","active","2026-10-27"],"y":0,"o":""},{"n":"Maharishi International University","a":[],"s":"IA","l":2,"h":["gopioneers","active","2026-10-22"],"y":["UC-exlbklYiMyGH2fCsrBKAg","@MIUAthletics"],"o":""},{"n":"Maranatha Baptist University","a":["Maranatha Baptist"],"s":"WI","l":2,"h":["mbusabercats","none",""],"y":["UCwyU0ZhqaCkQ61Q4e-uc1Gw","@MBUSabercats"],"o":""},{"n":"Martin Luther College","a":["Martin Luther"],"s":"MN","l":2,"h":["martinlutherknights","active","2026-10-25"],"y":0,"o":""},{"n":"Mayville State University","a":["Mayville St.","Mayville State"],"s":"ND","l":2,"h":["comets","active","2026-01-17"],"y":["UC76YjKsriWK7L1l2D0wY5NQ","@Comet_Athletics"],"o":""},{"n":"McMurry University","a":[],"s":"TX","l":2,"h":["mcmurryuniversity","active","2026-10-21"],"y":["UCAVg367wx5b3ebxD4pjdXXg","@mcmwarhawks"],"o":""},{"n":"McPherson College","a":["McPherson"],"s":"KS","l":2,"h":["mcpherson","active","2026-10-26"],"y":["UCBTmfFXxzSaBkolb5gM3JaQ","@McPhersonCollegeBulldogs"],"o":""},{"n":"Metropolitan State University of Denver","a":[],"s":"CO","l":2,"h":["metrostatedenver","active","2026-10-25"],"y":0,"o":""},{"n":"Miami University Hamilton","a":["Miami-Hamilton"],"s":"OH","l":2,"h":["muharriers","active","2026-10-15"],"y":0,"o":""},{"n":"Miami University Middletown","a":["Miami-Middletown"],"s":"OH","l":2,"h":0,"y":0,"o":""},{"n":"Mid-America Christian University","a":[],"s":"OK","l":2,"h":["macuevangels","active","2026-10-24"],"y":0,"o":""},{"n":"MidAmerica Nazarene University","a":["MidAmerica Naz."],"s":"KS","l":2,"h":["mnu","active","2026-10-27"],"y":["UCcuowpUaxFCUA-LeCEBcNKA","@MNUSports"],"o":""},{"n":"Midland University","a":["Midland"],"s":"NE","l":2,"h":["midlanduniversity","active","2026-10-25"],"y":["UCF0_ep6HvvAmk4qVitTH9Eg","@midlanduathletics"],"o":""},{"n":"Minnesota State Community and Technical College","a":[],"s":"MN","l":2,"h":["fergusfalls","active","2026-10-24"],"y":0,"o":""},{"n":"Mission University","a":["Mission","Mission (Mo.)"],"s":"MO","l":2,"h":["missionuni","active","2026-05-09"],"y":0,"o":""},{"n":"Missouri Baptist University","a":[],"s":"MO","l":2,"h":["mobap","active","2026-08-28"],"y":0,"o":""},{"n":"Missouri Southern State University","a":[],"s":"MO","l":2,"h":["mssulions","active","2026-10-27"],"y":0,"o":""},{"n":"Missouri University of Science and Technology","a":["Missouri S&T","Missouri-S&T"],"s":"MO","l":2,"h":["mst","active","2026-10-25"],"y":0,"o":""},{"n":"Missouri Valley University","a":["Missouri Valley College"],"s":"MO","l":2,"h":["mvc","active","2026-10-28"],"y":0,"o":""},{"n":"Missouri Western State University","a":["Missouri Western State"],"s":"MO","l":2,"h":["mwsugriffons","active","2026-10-25"],"y":0,"o":""},{"n":"Moberly Area Community College","a":["Moberly Area CC"],"s":"MO","l":2,"h":["macc","active","2026-10-26"],"y":0,"o":""},{"n":"Montana State University-Northern","a":["Montana State-Northern"],"s":"MT","l":2,"h":["msun","active","2026-10-24"],"y":0,"o":""},{"n":"Montana Technological University","a":["Montana Tech"],"s":"MT","l":2,"h":0,"y":0,"o":""},{"n":"Moody Bible Institute","a":[],"s":"IL","l":2,"h":0,"y":0,"o":""},{"n":"Morningside University","a":["Morningside","Morningside (IA)","Morningside University (Iowa)"],"s":"IA","l":2,"h":["mside","active","2026-10-25"],"y":["UCqZKCul01aafqMxqo-VBtAg","@msidemustangs"],"o":""},{"n":"Mount Mary University","a":["Mt Mary","Mt Mary University"],"s":"WI","l":2,"h":["mtmary","none",""],"y":0,"o":""},{"n":"Mount Mercy University","a":["Mount Mercy"],"s":"IA","l":2,"h":["mtmercy","active","2026-10-25"],"y":["UCoXXplzVJT0d42GruaS5agQ","@mountmercymustangs"],"o":""},{"n":"Nelson University","a":["Nelson University (AZ)"],"s":"AZ","l":2,"h":["nuazwarriors","active","2026-10-27"],"y":0,"o":""},{"n":"Newman University","a":["Newman"],"s":"KS","l":2,"h":["newman","active","2026-10-24"],"y":0,"o":""},{"n":"North American University","a":[],"s":"TX","l":2,"h":0,"y":0,"o":""},{"n":"North Central University","a":["North Central (Minn.)"],"s":"MN","l":2,"h":["northcentralrams","active","2026-10-26"],"y":0,"o":""},{"n":"Northeastern State University","a":[],"s":"OK","l":2,"h":["nsugoriverhawks","active","2026-10-25"],"y":0,"o":""},{"n":"Northern Oklahoma College","a":[],"s":"OK","l":2,"h":["jets","active","2026-10-22"],"y":0,"o":""},{"n":"Northwest Missouri State University","a":[],"s":"MO","l":2,"h":["nwmsubearcats","active","2026-10-25"],"y":["UCYdp17vOGFuu6x5Z4EWF50Q","@BearcatSports"],"o":""},{"n":"Northwestern College","a":["Northwestern","Northwestern (IA)","Northwestern College (Iowa)"],"s":"IA","l":2,"h":["nwcraiders","active","2026-10-24"],"y":0,"o":""},{"n":"Northwestern Oklahoma State University","a":[],"s":"OK","l":2,"h":["riderangersride","active","2026-10-20"],"y":0,"o":""},{"n":"Nueta Hidatsa Sahnish College","a":["Nueta Hidatsa Sahnish college"],"s":"ND","l":2,"h":["gonhs","active","2026-05-15"],"y":0,"o":""},{"n":"Oak Hills Christian College","a":["Oak Hill Christian College","Oak Hills Christian"],"s":"MN","l":2,"h":0,"y":0,"o":""},{"n":"Occidental College","a":[],"s":"CA","l":2,"h":["occidental","active","2026-08-25"],"y":0,"o":""},{"n":"Oklahoma Christian University","a":["Okla. Christian"],"s":"OK","l":2,"h":["oc","active","2026-05-23"],"y":0,"o":""},{"n":"Oklahoma City University","a":[],"s":"OK","l":2,"h":["ocustars","active","2026-10-24"],"y":0,"o":""},{"n":"Oklahoma Panhandle State University","a":["Oklahoma Panhandle St"],"s":"OK","l":2,"h":["opsu","active","2026-10-26"],"y":0,"o":""},{"n":"Oklahoma Wesleyan University","a":[],"s":"OK","l":2,"h":["okwu","active","2026-10-27"],"y":["UC9vXqvshqRD5k3lw4OXDivw","@OKWUEaglesSportsNetwork"],"o":""},{"n":"Ottawa University","a":["Ottawa","Ottawa University (Kan.)"],"s":"KS","l":2,"h":["ottawaks","active","2026-10-28"],"y":0,"o":""},{"n":"Pacific Lutheran University","a":[],"s":"WA","l":2,"h":["golutes","active","2026-06-17"],"y":0,"o":""},{"n":"Park University","a":["Park","Park University (Mo.)"],"s":"MO","l":2,"h":["parkathletics","active","2026-10-28"],"y":0,"o":""},{"n":"Penn State Mont Alto","a":[],"s":"PA","l":2,"h":["psumontalto","active","2026-10-24"],"y":0,"o":""},{"n":"Penn State York","a":[],"s":"PA","l":2,"h":["psuyork","active","2026-10-11"],"y":0,"o":""},{"n":"Pensacola Christian College","a":["Pensacola Christian"],"s":"FL","l":2,"h":["pcceagles","active","2026-09-29"],"y":0,"o":""},{"n":"Providence University College","a":["Providence-Manitoba"],"s":"MB","l":2,"h":["puc","active","2026-10-25"],"y":0,"o":""},{"n":"Randall University","a":["Randall","Randall Univrsity"],"s":"OK","l":2,"h":["rusaints","active","2026-10-24"],"y":["UCHoqeRKeb5n_3zpUBPXpvOw","@RUAthletics"],"o":""},{"n":"Rochester Christian University","a":["Rochester (Mich.)"],"s":"MI","l":2,"h":["rcuwarriors","none",""],"y":0,"o":""},{"n":"Rockhurst University","a":["Rockhurst"],"s":"MO","l":2,"h":["rockhurst","active","2026-10-27"],"y":0,"o":""},{"n":"Rocky Mountain College","a":["Rocky Mountain"],"s":"MT","l":2,"h":0,"y":0,"o":""},{"n":"Rogers State University","a":[],"s":"OK","l":2,"h":["rogersstate","active","2026-10-25"],"y":0,"o":""},{"n":"Simmons College of Kentucky","a":[],"s":"KY","l":2,"h":0,"y":0,"o":""},{"n":"Simpson College","a":["Simpson"],"s":"IA","l":2,"h":["simpson","active","2026-10-27"],"y":0,"o":""},{"n":"Sisseton Wahpeton College","a":["Sisseton Wahpenton College"],"s":"SD","l":2,"h":0,"y":0,"o":""},{"n":"South Dakota School of Mines & Technology","a":["South Dakota Mines"],"s":"SD","l":2,"h":["sdmines","active","2026-10-28"],"y":["UCHL-cUj1GqLSTDPxOF8IEbg","@SouthDakotaMinesHardrockers"],"o":""},{"n":"South Dakota State University","a":[],"s":"SD","l":2,"h":0,"y":["UCA1IudGejbOuoRqOPhdTXUQ","@gojackssdsu"],"o":""},{"n":"Southeastern Baptist College","a":["Southeastern Baptist"],"s":"MS","l":2,"h":0,"y":["UCpo9BS9eoToRG4xHnSb_zBA","@SBCathletics_"],"o":""},{"n":"Southwest Baptist University","a":[],"s":"MO","l":2,"h":["sbubearcatsglvc","active","2026-10-27"],"y":0,"o":""},{"n":"Southwestern College","a":["Southwestern College (Kan.)"],"s":"KS","l":2,"h":["southwesternks","active","2026-10-28"],"y":["UC83tA2XnwygXz-bbsiBeiSQ","@BuilderSportsLive"],"o":""},{"n":"Southwestern Community College","a":["Southwestern CC","Southwestern Community College (Iowa)"],"s":"IA","l":2,"h":["southwesternspartans","active","2026-10-22"],"y":0,"o":""},{"n":"Southwestern Illinois College","a":[],"s":"IL","l":2,"h":["swic","active","2026-10-27"],"y":0,"o":""},{"n":"Spalding University","a":["Spalding University (Ky.)"],"s":"KY","l":2,"h":["spalding","active","2026-10-24"],"y":["UCUarL0NoAP1vGTtibdXYIgg","@SpaldingDotEDU"],"o":""},{"n":"St. Ambrose University","a":["Saint Ambrose University","Saint Ambrose University (Iowa)","St. Ambrose (IA)"],"s":"IA","l":2,"h":["stambrose","active","2026-10-18"],"y":["UCKaqhlnY1BafIs5yyNJBsxQ","@SAUFightingBees"],"o":""},{"n":"Stephens College","a":["Stephens"],"s":"MO","l":2,"h":["stephens","active","2026-10-27"],"y":0,"o":""},{"n":"Sterling College","a":["Sterling","Sterling (Kan.)"],"s":"KS","l":2,"h":["sterling","active","2026-10-24"],"y":["UCSn83Jlbsv7gpUiw99bvWrw","@SterlingCollege"],"o":""},{"n":"Tabor College","a":["Tabor","Tabor College (Kan.)"],"s":"KS","l":2,"h":["tabor","active","2026-10-26"],"y":["UC5hEYiIzYABiMThMhPj12tQ","@taborwebcast10"],"o":""},{"n":"Texas A&M International University","a":["Texas A&M-International University"],"s":"TX","l":2,"h":["tamiu","active","2026-04-18"],"y":0,"o":""},{"n":"Texas A&M University-Corpus Christi","a":["Texas A&M Corpus Christi","Texas A&M-Corpus Christi"],"s":"TX","l":2,"h":["goislanders","stale","2024-09-08"],"y":0,"o":""},{"n":"Trinity Baptist College","a":["Trinity College of Jacksonville"],"s":"FL","l":2,"h":["tbcnccaa","none",""],"y":0,"o":""},{"n":"Truman State University","a":[],"s":"MO","l":2,"h":["truman","active","2026-10-24"],"y":0,"o":""},{"n":"Turtle Mountain Community College","a":["Turtle Mountain CC"],"s":"ND","l":2,"h":["tmcc","active","2026-01-10"],"y":0,"o":""},{"n":"University of Central Arkansas","a":["Central Ark."],"s":"AR","l":2,"h":["uca","stale","2024-05-04"],"y":0,"o":""},{"n":"University of Cincinnati Clermont College","a":["Cincinnati-Clermont"],"s":"OH","l":2,"h":["ucclermont","stale","2025-10-23"],"y":0,"o":""},{"n":"University of Dallas","a":[],"s":"TX","l":2,"h":["universityofdallas","active","2026-02-07"],"y":["UCaw2_fFRAHW2MbxQWvDIPFA","@UDallasCrusadersAthletics"],"o":""},{"n":"University of Dubuque","a":[],"s":"IA","l":2,"h":["dubuque","active","2026-10-26"],"y":0,"o":""},{"n":"University of Health Sciences and Pharmacy in St. Louis","a":["University of Health Sciences and Pharmacy"],"s":"MO","l":2,"h":["uhspathletics","active","2026-10-13"],"y":0,"o":""},{"n":"University of Maine at Augusta","a":["Me.-Augusta"],"s":"ME","l":2,"h":["umaineaugusta","active","2025-11-02"],"y":0,"o":""},{"n":"University of Minnesota Morris","a":["Minn.-Morris"],"s":"MN","l":2,"h":["minnesotamorriscougars","active","2026-10-24"],"y":["UC725jXtEB7BLEUxlyGjQ2pw","@cougarathletics659"],"o":""},{"n":"University of Missouri-Kansas City","a":[],"s":"MO","l":2,"h":["umkc","stale","2019-11-10"],"y":0,"o":""},{"n":"University of Montana Western","a":["Montana Western"],"s":"MT","l":2,"h":["uwmbulldogs","active","2026-10-17"],"y":0,"o":""},{"n":"University of Nebraska at Omaha","a":["Neb.-Omaha"],"s":"NE","l":2,"h":0,"y":0,"o":""},{"n":"University of Nebraska-Lincoln","a":["University of Nebraska"],"s":"NE","l":2,"h":0,"y":0,"o":""},{"n":"University of Northwestern-St. Paul","a":["Northwestern (Minn.)"],"s":"MN","l":2,"h":["unorthwesterneagles","active","2026-10-27"],"y":0,"o":""},{"n":"University of Providence","a":["Providence"],"s":"MT","l":2,"h":["providencepargos","active","2026-09-18"],"y":0,"o":""},{"n":"University of Puget Sound","a":[],"s":"WA","l":2,"h":["loggerathletics","active","2025-11-16"],"y":["UCW0xaFoA7vOEvRBpEmhOAQA","@PugetSoundLoggers"],"o":""},{"n":"University of Saint Mary","a":["University of St. Mary"],"s":"KS","l":2,"h":["universityofsaintmary","active","2026-10-27"],"y":["UCa_dBwPJvZSVk84ENjydgxg","@universityofsaintmaryathletics"],"o":""},{"n":"University of Science and Arts of Oklahoma","a":["USAO"],"s":"OK","l":2,"h":["usao","active","2026-10-28"],"y":0,"o":""},{"n":"University of Sioux Falls","a":["University of Sioux Falls (S.D.)"],"s":"SD","l":2,"h":["usfcougars","active","2026-05-09"],"y":0,"o":""},{"n":"University of South Dakota","a":["South Dakota"],"s":"SD","l":2,"h":0,"y":["UC0GXO_ifec3gMB0ZYW0wELQ","@SouthDakotaCoyotes"],"o":""},{"n":"University of Texas at Tyler","a":["Univeristy of Texas at Tyler"],"s":"TX","l":2,"h":["1500","active","2026-10-16"],"y":0,"o":""},{"n":"University of Texas Rio Grande Valley","a":["Texas-Rio Grande Valley"],"s":"TX","l":2,"h":["utrgv","stale","2025-01-28"],"y":0,"o":""},{"n":"University of the Ozarks","a":[],"s":"AR","l":2,"h":["universityoftheozarks","stale","2025-05-14"],"y":0,"o":""},{"n":"University of the Virgin Islands","a":[],"s":"VI","l":2,"h":["uvibucs","active","2026-10-23"],"y":0,"o":""},{"n":"University of Tulsa","a":[],"s":"OK","l":2,"h":0,"y":0,"o":""},{"n":"University of Wisconsin-Platteville","a":[],"s":"WI","l":2,"h":["uwplatteville","active","2026-10-27"],"y":0,"o":""},{"n":"University of Wisconsin-Stevens Point","a":[],"s":"WI","l":2,"h":["stevenspoint","active","2026-10-24"],"y":["UCBQuSNEJ1emQeLl291MUfxw","@uwspathletics"],"o":""},{"n":"Universit\u00e9 de Saint-Boniface","a":["Universite' de Saint Boniface","University of Saint Boniface"],"s":"MB","l":2,"h":["saintboniface","stale","2025-03-02"],"y":0,"o":""},{"n":"Valley City State University","a":["Valley City St.","Valley City State","Valley City State University (N.D.)"],"s":"ND","l":2,"h":0,"y":["UC1MDZ7BltjEDkko7JuSl1bA","@vcsuathletics1211"],"o":""},{"n":"Vermont State University Randolph","a":[],"s":"VT","l":2,"h":["vtsuknights","active","2026-10-17"],"y":0,"o":""},{"n":"Waldorf University","a":["Waldorf","Waldorf (Iowa)","Waldorf University (Iowa)"],"s":"IA","l":2,"h":["waldorf","active","2026-10-24"],"y":["UCQ1iLtqrXwyoV7l_PYsZZLA","@waldorfwarriorathletics4268"],"o":""},{"n":"Wartburg College","a":[],"s":"IA","l":2,"h":["wartburg","active","2026-10-27"],"y":0,"o":""},{"n":"Washington Adventist University","a":["Washington Adventist"],"s":"MD","l":2,"h":["washingtonadventist","stale","2023-12-18"],"y":0,"o":""},{"n":"Wayland Baptist University","a":["Wayland Baptist University (Texas)"],"s":"TX","l":2,"h":["waylandbaptist","active","2026-10-27"],"y":0,"o":""},{"n":"Wayne State College","a":[],"s":"NE","l":2,"h":["wscwildcats","active","2026-10-03"],"y":0,"o":""},{"n":"Webster University","a":[],"s":"MO","l":2,"h":0,"y":["UCevGvh43Bh6e34XCq76lERg","@Gorloks"],"o":""},{"n":"Welch College","a":[],"s":"TN","l":2,"h":["welch","stale","2024-02-14"],"y":["UCeRE83VblDwd7Hls-lOmraA","@welchflames"],"o":""},{"n":"West Coast Baptist College","a":["West Coast Baptist"],"s":"CA","l":2,"h":0,"y":0,"o":""},{"n":"Westminster College","a":["Westminster College (MO)"],"s":"MO","l":2,"h":["westminsterbluejays","active","2026-10-24"],"y":["UC47UXPHBTQnfaGEEgnmk7-Q","@westminsterathletics7961"],"o":""},{"n":"Wichita State University","a":[],"s":"KS","l":2,"h":0,"y":["UCnFsCzxvZQaxaV30I_9sPTQ","@goshockers"],"o":""},{"n":"William Jewell College","a":["William Jewell"],"s":"MO","l":2,"h":["jewell","active","2026-10-24"],"y":0,"o":""},{"n":"William Penn University","a":["William Penn","William Penn University (Iowa)"],"s":"IA","l":2,"h":["statesmen","active","2026-10-20"],"y":["UCaxqL_pJqSPhjDMpNjv882g","@WPUAthletics"],"o":""},{"n":"William Woods University","a":["William Woods University (Mo.)"],"s":"MO","l":2,"h":["williamwoodsuniversity","active","2026-10-27"],"y":0,"o":""},{"n":"Wright State University-Lake Campus","a":["Wright State - Lake Campus"],"s":"OH","l":2,"h":["wrightstatelake","active","2026-10-26"],"y":0,"o":""}]/*SCHOOLS-END*/;
+
+  /* YT-PARSE-BEGIN */
+  // Pure helpers for YouTube links and channel pages (no DOM; tested outside the page).
+  const YtParse = (() => {
+    const ID = /^[A-Za-z0-9_-]{11}$/;
+    const HOST = /^(?:[a-z0-9-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)$/i;
+    // "90", "90s", "1m30s", "1h2m3s", "1:30" -> seconds
+    function parseT(v) {
+      v = String(v || '').trim();
+      if (!v) return 0;
+      if (/^\d+(\.\d+)?s?$/.test(v)) return Math.floor(parseFloat(v));
+      const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i.exec(v);
+      if (m && (m[1] || m[2] || m[3])) return (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0);
+      if (/^\d+(:\d{1,2}){1,2}$/.test(v)) return v.split(':').reduce((a, n) => a * 60 + Number(n), 0);
+      return 0;
+    }
+    // Returns { id, t } for a YouTube link (URL, embed snippet, "yt:ID" / "youtube:ID"), else null.
+    function parseLink(raw) {
+      const s = String(raw || '').trim().replace(/&amp;/gi, '&');
+      let m = /^(?:yt|youtube)\s*:\s*([A-Za-z0-9_-]{11})$/i.exec(s);
+      if (m) return { id: m[1], t: 0 };
+      m = /(?:https?:)?\/\/(?:[a-z0-9-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)(?:[/?#][^\s"'<>]*)?/i.exec(s) ||
+          /^(?:[a-z0-9-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)\/[^\s"'<>]*/i.exec(s);
+      if (!m) return null;
+      let u;
+      try { u = new URL(/^https?:/i.test(m[0]) ? m[0] : 'https://' + m[0].replace(/^\/\//, '')); } catch (e) { return null; }
+      if (!HOST.test(u.hostname)) return null;
+      const path = u.pathname.split('/').filter(Boolean);
+      let id = '';
+      if (/(^|\.)youtu\.be$/i.test(u.hostname)) id = path[0] || '';
+      else if (path[0] === 'watch') id = u.searchParams.get('v') || '';
+      else if (['live', 'shorts', 'embed', 'v', 'e'].includes(path[0])) id = path[1] || '';
+      else if (!path.length || path[0] === 'attribution_link') id = u.searchParams.get('v') || '';
+      if (!ID.test(id)) return null;
+      const hash = new URLSearchParams(u.hash.replace(/^#/, ''));
+      const t = parseT(u.searchParams.get('t') || u.searchParams.get('start') || hash.get('t') || hash.get('start'));
+      return { id, t };
+    }
+    function text(o) {
+      if (!o) return '';
+      if (typeof o === 'string') return o;
+      if (typeof o.simpleText === 'string') return o.simpleText;
+      if (typeof o.content === 'string') return o.content;
+      if (Array.isArray(o.runs)) return o.runs.map((r) => (r && typeof r.text === 'string' ? r.text : '')).join('');
+      return '';
+    }
+    // The ytInitialData object embedded in a channel page, or null.
+    function initialData(html) {
+      html = String(html || '');
+      const marks = ['var ytInitialData = ', 'window["ytInitialData"] = ', 'ytInitialData = '];
+      for (const mk of marks) {
+        const i = html.indexOf(mk);
+        if (i < 0) continue;
+        const j = html.indexOf(';<\/script>', i); // "<\/" keeps this inline script from ending here
+        if (j < 0) continue;
+        try { const d = JSON.parse(html.slice(i + mk.length, j)); if (d && typeof d === 'object') return d; } catch (e) {}
+      }
+      return null;
+    }
+    function fromOld(r) { // videoRenderer / gridVideoRenderer
+      const badges = [];
+      (r.thumbnailOverlays || []).forEach((o) => {
+        const s = o && o.thumbnailOverlayTimeStatusRenderer;
+        if (s) badges.push(text(s.text) || String(s.style || ''));
+      });
+      return {
+        id: r.videoId, title: text(r.title),
+        when: text(r.publishedTimeText) || (r.upcomingEventData ? 'Upcoming' : ''),
+        duration: text(r.lengthText) || badges.find((b) => /^\d+(:\d\d)+$/.test(b)) || '',
+        live: badges.some((b) => /LIVE/i.test(b)) || (r.badges || []).some((b) => /LIVE/i.test(JSON.stringify(b))),
+        upcoming: !!r.upcomingEventData || badges.some((b) => /UPCOMING/i.test(b)),
+      };
+    }
+    function fromLockup(r) { // lockupViewModel (2024+ shape)
+      if (r.contentType && !/VIDEO/i.test(String(r.contentType))) return null;
+      const md = (r.metadata && r.metadata.lockupMetadataViewModel) || {};
+      const parts = [];
+      const rows = md.metadata && md.metadata.contentMetadataViewModel && md.metadata.contentMetadataViewModel.metadataRows;
+      (rows || []).forEach((row) => (row && row.metadataParts || []).forEach((p) => {
+        if (p && !p.leadingIcon) { const t = text(p.text); if (t) parts.push(t); }
+      }));
+      const badges = [];
+      const ov = r.contentImage && r.contentImage.thumbnailViewModel && r.contentImage.thumbnailViewModel.overlays;
+      (ov || []).forEach((o) => {
+        const bo = o && (o.thumbnailBottomOverlayViewModel || o.thumbnailOverlayBadgeViewModel);
+        const list = (bo && (bo.badges || bo.thumbnailBadges)) || [];
+        list.forEach((b) => { const v = b && b.thumbnailBadgeViewModel; if (v && typeof v.text === 'string') badges.push(v.text); });
+      });
+      const when = parts.find((p) => /\bago\b|^Streamed|^Scheduled|^Premieres|^Waiting|watching/i.test(p)) || '';
+      return {
+        id: r.contentId, title: text(md.title),
+        when, duration: badges.find((b) => /^\d+(:\d\d)+$/.test(b)) || '',
+        live: badges.some((b) => /^LIVE$/i.test(b)) || /watching/i.test(when),
+        upcoming: badges.some((b) => /UPCOMING/i.test(b)) || /^Scheduled|^Premieres|^Waiting/i.test(when),
+      };
+    }
+    // Videos in page order: [{ id, title, when, duration, live, upcoming }]
+    function videos(data) {
+      const out = [], seen = new Set(), stack = [data];
+      let steps = 0;
+      while (stack.length && steps++ < 2000000) {
+        const o = stack.pop();
+        if (!o || typeof o !== 'object') continue;
+        if (Array.isArray(o)) { for (let i = o.length - 1; i >= 0; i--) stack.push(o[i]); continue; }
+        let v = null;
+        try {
+          if (o.videoRenderer) v = fromOld(o.videoRenderer);
+          else if (o.gridVideoRenderer) v = fromOld(o.gridVideoRenderer);
+          else if (o.lockupViewModel) v = fromLockup(o.lockupViewModel);
+        } catch (e) { v = null; }
+        if (v) {
+          if (ID.test(String(v.id || '')) && !seen.has(v.id)) { seen.add(v.id); v.title = v.title || 'Untitled video'; out.push(v); }
+          continue; // don't descend into a renderer (its menus repeat the ID)
+        }
+        if (o.videoRenderer || o.gridVideoRenderer || o.lockupViewModel) continue;
+        const ks = Object.keys(o);
+        for (let i = ks.length - 1; i >= 0; i--) { const c = o[ks[i]]; if (c && typeof c === 'object') stack.push(c); }
+      }
+      return out;
+    }
+    return { ID, parseT, parseLink, initialData, videos };
+  })();
+  /* YT-PARSE-END */
+
+  /* SCHOOL-SEARCH-BEGIN */
+  // Typeahead matching over the inlined directory (pure; tested outside the page).
+  const SchoolSearch = (() => {
+    const STOP = new Set(['of', 'the', 'and', 'at', 'for']);
+    function norm(s) {
+      s = String(s || '');
+      try { s = s.normalize('NFKD').replace(/[̀-ͯ]/g, ''); } catch (e) {}
+      return s.toLowerCase().replace(/&/g, ' and ').replace(/['’.]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+    function keysFor(sc) {
+      const names = [sc.n].concat(sc.a || []);
+      const keys = names.map(norm).filter(Boolean);
+      if (sc.h && sc.h[0]) keys.push(norm(sc.h[0]));
+      if (sc.y && sc.y[1]) keys.push(norm(sc.y[1]));
+      const acr = [];
+      names.forEach((n) => {
+        const w = norm(n).split(' ').filter(Boolean);
+        if (w.length > 1) { acr.push(w.map((x) => x[0]).join('')); acr.push(w.filter((x) => !STOP.has(x)).map((x) => x[0]).join('')); }
+      });
+      return { keys: [...new Set(keys)], acr: [...new Set(acr.filter((a) => a.length > 1))] };
+    }
+    function score(q, toks, ix) {
+      const qc = q.replace(/ /g, '');
+      let best = 0;
+      for (const k of ix.keys) {
+        const words = k.split(' ');
+        let s = 0;
+        if (k === q) s = 100;
+        else if (k.startsWith(q)) s = 85;
+        else if (toks.every((t) => words.some((w) => w.startsWith(t)))) s = 75;
+        else if ((' ' + k).includes(' ' + q)) s = 65;
+        else if (k.replace(/ /g, '').includes(qc)) s = 45;
+        else if (toks.length > 1 && toks.every((t) => k.includes(t))) s = 40;
+        if (s > best) best = s;
+      }
+      for (const a of ix.acr) {
+        if (a === qc) best = Math.max(best, 80);
+        else if (qc.length >= 2 && a.startsWith(qc)) best = Math.max(best, 50);
+      }
+      return best;
+    }
+    function make(list) {
+      const idx = list.map((sc) => ({ sc, ix: keysFor(sc) }));
+      // -> [{ sc, score }] best first; Union and its opponents (levels 0/1) always rank above level 2.
+      function search(raw, limit) {
+        const q = norm(raw);
+        if (!q) return [];
+        const toks = q.split(' ');
+        const out = [];
+        idx.forEach(({ sc, ix }) => { const s = score(q, toks, ix); if (s > 0) out.push({ sc, score: s }); });
+        out.sort((a, b) => ((a.sc.l <= 1 ? 0 : 1) - (b.sc.l <= 1 ? 0 : 1)) || (b.score - a.score) || a.sc.l - b.sc.l ||
+          a.sc.n.localeCompare(b.sc.n));
+        return limit ? out.slice(0, limit) : out;
+      }
+      return { search, norm };
+    }
+    return { make, norm };
+  })();
+  /* SCHOOL-SEARCH-END */
+  const schoolIndex = SchoolSearch.make(Array.isArray(SCHOOLS) ? SCHOOLS : []);
+  const UNION = (() => {
+    const u = (SCHOOLS || []).find((s) => s.l === 0) || null;
+    const slugs = [];
+    const add = (s) => { if (s && s.h && s.h[0] && !slugs.includes(s.h[0])) slugs.push(s.h[0]); };
+    add(u || { h: ['unionadventist'] });
+    if (!slugs.includes('unionadventist')) slugs.unshift('unionadventist');
+    (SCHOOLS || []).filter((s) => s.l === 1).forEach(add);
+    const yt = (u && u.y && u.y[0]) ? u.y : ['UC-abuN7J1DZH8KOCboQhlbA', '@unionadventistlive'];
+    return { school: u, sites: slugs, yt, name: u ? u.n : 'Union Adventist University' };
+  })();
+
+  let hls = null;
+  let current = null;   // { key, id, url, type, input, title, date, status, siteName }
+  let pendingStart = 0;
+  let bookmarks = [];
+  let panelCollapsed = false; // bookmarks/shortcuts panel hidden (B)
+  let loadSeq = 0;
+  let playWhenReady = false; // resume local playback once frames are ready (after casting ends)
+  // Cast state. connected = a Cast session is up (local video stays paused, controls drive the TV).
+  // loadedKey = the game (current.key) the TV is playing; timeKey/lastTime = last known TV time for that game.
+  const CAST = { ctx: null, player: null, ctl: null, connected: false, device: '', loadSeq: 0, loadedKey: null,
+                 timeKey: null, lastTime: 0, lastPaused: false, plan: null, error: '', rate: 1, rateTimer: 0, unsupported: false,
+                 failed: false };
+  // YouTube mode: on = a YouTube video replaces the <video>; ready = the IFrame player answered onReady.
+  // stepT/stepAt = target of the last frame step (getCurrentTime lags right after a seek).
+  const YTP = { on: false, player: null, ready: false, id: '', ticker: 0, apiPromise: null, stepT: 0, stepAt: 0, rates: null };
+  let titleHint = null; // { key, title, sub } for a YouTube video picked from a list
+
+  // ---------- utils ----------
+  function fmt(t) {
+    if (!isFinite(t) || t < 0) t = 0;
+    const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t % 60);
+    const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
+    return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+  }
+  function parseTime(s) { // "1:23:20", "83:20", "5000" -> seconds
+    if (!s) return 0;
+    const parts = String(s).trim().split(':').map(Number);
+    if (parts.some((n) => !isFinite(n) || n < 0)) return 0;
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  }
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    try { return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return d.toDateString(); }
+  }
+  function fmtDateTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    try { return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    catch (e) { return d.toString(); }
+  }
+  function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = cls || ''; }
+  let flashTimer;
+  function flash(msg) {
+    flashEl.textContent = msg; flashEl.style.opacity = 1;
+    clearTimeout(flashTimer); flashTimer = setTimeout(() => (flashEl.style.opacity = 0), 600);
+  }
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  // Seekable window [start, end] (works for VOD and live/DVR)
+  function ytTime() {
+    if (!YTP.ready) return pendingStart || 0;
+    if (Date.now() - YTP.stepAt < 1500) return YTP.stepT;
+    try { return Number(YTP.player.getCurrentTime()) || 0; } catch (e) { return 0; }
+  }
+  function ytDuration() { try { return YTP.ready ? Number(YTP.player.getDuration()) || 0 : 0; } catch (e) { return 0; } }
+  function localTime() { return YTP.on ? ytTime() : (video.currentTime || 0); }
+  function range() {
+    if (YTP.on) return [0, ytDuration()];
+    const s = video.seekable;
+    if (s && s.length) return [s.start(0), s.end(s.length - 1)];
+    return [0, isFinite(video.duration) ? video.duration : 0];
+  }
+  function seekTo(t) {
+    const [a, b] = range();
+    if (b > a) t = Math.min(Math.max(t, a), Math.max(a, b - 0.1));
+    else t = Math.max(0, t);
+    if (YTP.on) {
+      if (!YTP.ready) { pendingStart = t; return; }
+      YTP.stepT = t; YTP.stepAt = Date.now();
+      try { YTP.player.seekTo(t, true); } catch (e) {}
+      osd.textContent = osdText();
+      return;
+    }
+    video.currentTime = t;
+  }
+
+  // ---------- JSONP (Hudl endpoints send no CORS headers, but serve JS callbacks) ----------
+  let jsonpSeq = 0;
+  function jsonp(url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const name = 'gfvcb' + Date.now().toString(36) + (jsonpSeq++);
+      const s = document.createElement('script');
+      let settled = false, timer = 0;
+      const finish = () => {
+        settled = true; clearTimeout(timer); s.onerror = null;
+        if (s.parentNode) s.parentNode.removeChild(s);
+      };
+      const dropGlobal = () => { try { delete window[name]; } catch (e) { window[name] = undefined; } };
+      window[name] = (data) => { if (settled) return; finish(); dropGlobal(); resolve(data); };
+      s.onerror = () => { if (settled) return; finish(); dropGlobal(); reject(new Error('Could not reach Hudl (network error or blocked).')); };
+      timer = setTimeout(() => {
+        if (settled) return;
+        finish();
+        // A late response may still arrive: keep a no-op callback around briefly so it doesn't throw.
+        window[name] = () => {}; setTimeout(dropGlobal, 60000);
+        reject(new Error('Hudl did not respond in time.'));
+      }, timeoutMs || 15000);
+      s.async = true;
+      s.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + name;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Resolve a broadcast ID to its stream URL via Hudl's server-side fetch proxy.
+  // The VMAP contains analytics credentials; only the fields below are kept. It is never logged, shown or stored.
+  async function lookupBroadcast(id) {
+    const vmapUrl = `${HUDL}/api/broadcast/vmap/${encodeURIComponent(id)}`;
+    let data = await jsonp(`${HUDL}/api/viewer/app/rss?url=${encodeURIComponent(vmapUrl)}`, 15000);
+    try {
+      if (!data || data.success !== true || typeof data.contents !== 'string') {
+        const c = data && data.contents;
+        const msg = (c && typeof c === 'object' && c.error && c.error.message) || (data && data.status ? `HTTP ${data.status}` : 'Unexpected response');
+        throw new Error(String(msg));
+      }
+      const doc = new DOMParser().parseFromString(data.contents, 'text/xml');
+      if (doc.getElementsByTagName('parsererror').length) throw new Error('Could not read the broadcast info.');
+      const first = (tag) => doc.getElementsByTagName(tag)[0] || null;
+      const childText = (el, tag) => { const c = el && el.getElementsByTagName(tag)[0]; return c ? c.textContent.trim() : ''; };
+      const attr = (el, a, child) => (el && (el.getAttribute(a) || childText(el, child || a))) || '';
+      const b = first('Broadcast'), site = first('Site'), content = first('Content');
+      const info = {
+        id: attr(b, 'id') || String(id),
+        title: attr(b, 'title', 'Title'),
+        date: attr(b, 'date', 'Date'),
+        status: attr(b, 'status', 'Status'),
+        siteName: attr(site, 'name', 'Name'),
+        siteSlug: attr(site, 'slug', 'Slug'),
+        url: '', type: '', geoblocked: false,
+      };
+      if (content) {
+        const u = content.textContent.trim();
+        if (/^https:\/\/\S+$/i.test(u) && !/\.mp4(\?|$)/i.test(u)) info.url = u;
+        info.type = content.getAttribute('type') || '';
+        info.geoblocked = content.getAttribute('geoblocked') === 'true';
+      }
+      return info;
+    } finally {
+      data = null; // drop the raw response (and its credentials) right away
+    }
+  }
+
+  // ---------- input parsing ----------
+  // Returns { id } | { url } | { yt, t } | { none: true, slug? } | null (empty)
+  function parseInput(raw) {
+    const s = (raw || '').trim().replace(/&amp;/gi, '&');
+    if (!s) return null;
+    let m;
+    if ((m = /[?&#]B=(\d+)/.exec(s))) return { id: m[1] };                         // 1. GPAC ?B=
+    if ((m = /[?&#]bfplayvid=(\d+)/i.exec(s))) return { id: m[1] };                // 2. BlueFrame share link
+    if ((m = /\/broadcast\/embed\/(\d+)/i.exec(s))) return { id: m[1] };           // 3. embed URL / <iframe> snippet
+    if ((m = /\/api\/broadcast\/vmap\/(\d+)/i.exec(s))) return { id: m[1] };       // 4. VMAP URL
+    const yt = YtParse.parseLink(s);                                               // YouTube link or "yt:ID"
+    if (yt) return { yt: yt.id, t: yt.t };
+    if (/\.m3u8(\?|#|$|["'\s])/i.test(s)) {                                       // 5. direct HLS
+      const u = /https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/i.exec(s);
+      return { url: u ? u[0] : s };
+    }
+    if (/^\d{1,10}$/.test(s)) return { id: s };                                    // 6. bare ID
+    const runs = s.match(/\d{6,}/g);                                               // 7. last long digit run
+    if (runs) return { id: runs[runs.length - 1] };
+    return { none: true, slug: guessSlug(s) };
+  }
+  // Prefill the Browse slug only for sites we know map to a Hudl site slug.
+  const KNOWN_SITES = { 'occambassadors.com': 'occambassadors' };
+  function guessSlug(s) {
+    const g = /gpacnetwork\.com\/([a-z0-9_-]+)/i.exec(s);
+    if (g) return g[1].toLowerCase();
+    const h = /^(?:[a-z]+:\/\/)?([^/?#:\s]+)/i.exec(s);
+    const host = h ? h[1].toLowerCase().replace(/^www\./, '') : '';
+    return KNOWN_SITES[host] || '';
+  }
+
+  // ---------- notice ----------
+  function showNotice(html, isErr) {
+    noticeEl.innerHTML = html;
+    noticeEl.className = isErr ? 'err' : '';
+    noticeEl.style.display = 'block';
+  }
+  function hideNotice() { noticeEl.style.display = 'none'; noticeEl.innerHTML = ''; }
+  function helpNoId(slug) {
+    return `<strong>No game ID found in that link.</strong> School pages like <code>.../watch-live</code> don't include one.
+     <ul>
+       <li>Use <strong>Browse school</strong> above with the school's site name (e.g. <code>occambassadors</code> or <code>mountmarty</code>) and pick the game from the list.` +
+       (slug ? ` The list for <code>${escapeHtml(slug)}</code> is open below.` : '') + `</li>
+       <li>On a GPAC Network page, open the game so the address shows <code>?B=</code>, then paste that address.</li>
+     </ul>`;
+  }
+
+  // ---------- loading ----------
+  async function loadFromInput(raw, startAt) {
+    hideNotice();
+    let text = (raw || '').trim();
+    // Accept "4679968 @ 1:23:20" (what Copy link produces when a URL can't be built)
+    const at = /\s*@\s*(\d+(?::\d{1,2}){0,2})\s*$/.exec(text);
+    if (at) { if (!startAt) startAt = parseTime(at[1]); text = text.slice(0, at.index).trim(); }
+    const p = parseInput(text);
+    if (!p) { setStatus('Paste a game link first.', 'warn'); return; }
+    if (p.none) {
+      setStatus('Could not find a broadcast ID or .m3u8 URL in that input.', 'err');
+      showNotice(helpNoId(p.slug), true);
+      if (p.slug) { siteInput.value = p.slug; openBrowse(p.slug); }
+      return;
+    }
+    const seq = ++loadSeq;
+    browseEl.className = '';
+    if (p.yt) {
+      startYouTube(p.yt, startAt || p.t || 0, seq);
+      return;
+    }
+    if (p.url) {
+      start({ key: 'url:' + p.url.split('?')[0], id: null, url: p.url, type: 'direct', input: text }, startAt);
+      return;
+    }
+    const id = p.id;
+    destroy();
+    current = { key: id, id, url: null, type: null, input: text };
+    pendingStart = Math.max(0, Number(startAt) || 0);
+    loadBookmarks(); updateUrl(true); showTitle(null);
+    setStatus(`Looking up broadcast ${id}...`);
+    let info;
+    try {
+      info = await lookupBroadcast(id);
+    } catch (e) {
+      if (seq !== loadSeq) return;
+      setStatus(`Lookup failed for ${id}: ${e.message || e}`, 'err');
+      showNotice(`<strong>Couldn't find a stream for broadcast ${escapeHtml(id)}.</strong> ${escapeHtml(e.message || String(e))}
+        <div class="small" style="margin-top:6px">Check the link or ID. This lookup uses an undocumented Hudl endpoint; if it keeps failing, Hudl may have changed it.</div>`, true);
+      return;
+    }
+    if (seq !== loadSeq) return;
+    if (!info.url) {
+      showTitle(info);
+      const st = info.status ? ` (status: ${info.status})` : '';
+      setStatus(`No playable stream for broadcast ${id}${st}.`, 'err');
+      showNotice(`<strong>No stream is available for this broadcast yet${escapeHtml(st)}.</strong> Upcoming games get a stream when they go live.`, true);
+      return;
+    }
+    let playUrl = null;
+    if (LEGACY_M3U8.test(info.url) && window.Hls && Hls.isSupported()) {
+      try { playUrl = await legacyManifest(info.url); } catch (e) { playUrl = null; }
+      if (seq !== loadSeq) return;
+    }
+    start({ key: id, id, url: info.url, playUrl, type: info.type, input: text, title: info.title, date: info.date,
+            status: info.status, siteName: info.siteName, geoblocked: info.geoblocked }, startAt);
+  }
+
+  // Older archived games resolve to a vcloud.hudl.com master playlist that is served without CORS headers,
+  // although the variant playlists and segments it lists (CloudFront) allow any origin. Fetch just the master
+  // through the same JSONP proxy used for the lookup and give hls.js a blob: copy. Returns null if unusable.
+  const LEGACY_M3U8 = /^https:\/\/vcloud\.hudl\.com\/file\/broadcast\/\d+\.m3u8(\?|$)/i;
+  let manifestBlobUrl = null;
+  let legacyCache = { url: '', text: '' }; // last validated legacy master (also used to pick the variant to cast)
+  async function fetchLegacyText(url) {
+    if (legacyCache.url === url && legacyCache.text) return legacyCache.text;
+    const r = await jsonp(`${HUDL}/api/viewer/app/rss?url=${encodeURIComponent(url)}`, 15000);
+    const text = r && r.success === true && typeof r.contents === 'string' ? r.contents : '';
+    if (!/^#EXTM3U/.test(text) || text.length > 200000) return null;
+    const uris = [];
+    text.split(/\r?\n/).forEach((l) => {
+      l = l.trim();
+      if (!l) return;
+      if (l[0] !== '#') uris.push(l);
+      else { const m = /URI="([^"]*)"/.exec(l); if (m) uris.push(m[1]); }
+    });
+    if (!uris.length || !uris.every((u) => /^https:\/\/[^\s"]+$/i.test(u))) return null;
+    legacyCache = { url, text };
+    return text;
+  }
+  async function legacyManifest(url) {
+    const text = await fetchLegacyText(url);
+    if (!text) return null;
+    if (manifestBlobUrl) { try { URL.revokeObjectURL(manifestBlobUrl); } catch (e) {} }
+    manifestBlobUrl = URL.createObjectURL(new Blob([text], { type: 'application/vnd.apple.mpegurl' }));
+    return manifestBlobUrl;
+  }
+
+  function showTitle(info) {
+    if (!info || !info.title) { gameTitleEl.style.display = 'none'; gameTitleEl.textContent = ''; return; }
+    gameTitleEl.textContent = info.title + (info.date ? ` — ${fmtDate(info.date)}` : '');
+    const sub = [info.siteName, info.status].filter(Boolean).join(' · ');
+    if (sub) { const sp = document.createElement('span'); sp.className = 'sub'; sp.textContent = sub; gameTitleEl.appendChild(sp); }
+    gameTitleEl.style.display = 'block';
+  }
+
+  function destroy() {
+    teardownYouTube();
+    if (hls) { hls.destroy(); hls = null; }
+    video.removeAttribute('src'); video.load();
+    qualitySel.innerHTML = '<option value="-1">Auto</option>'; qualitySel.disabled = true;
+  }
+
+  // ---------- YouTube (IFrame Player API replaces the <video>) ----------
+  function teardownYouTube() {
+    if (!YTP.on && !YTP.player && !$('ytHost')) return;
+    clearInterval(YTP.ticker);
+    const p = YTP.player;
+    YTP.on = false; YTP.player = null; YTP.ready = false; YTP.id = ''; YTP.rates = null; YTP.stepAt = 0;
+    if (p) { try { p.destroy(); } catch (e) {} }
+    const host = $('ytHost'); if (host) host.remove();
+    video.hidden = false;
+    $('qualityLbl').hidden = false;
+    syncSpeedSel(video.playbackRate || 1);
+    renderCastButton();
+  }
+  function loadYtApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    if (YTP.apiPromise) return YTP.apiPromise;
+    YTP.apiPromise = new Promise((resolve, reject) => {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { if (typeof prev === 'function') { try { prev(); } catch (e) {} } resolve(); };
+      const s = document.createElement('script');
+      s.async = true; s.src = 'https://www.youtube.com/iframe_api';
+      s.onerror = () => { s.remove(); reject(new Error('Could not load the YouTube player (network error or blocked).')); };
+      document.head.appendChild(s);
+      setTimeout(() => reject(new Error('The YouTube player did not load in time.')), 20000);
+    }).catch((e) => { YTP.apiPromise = null; throw e; });
+    return YTP.apiPromise;
+  }
+  function ytWatchUrl(id, t) { return `https://www.youtube.com/watch?v=${encodeURIComponent(id)}${t > 0 ? '&t=' + Math.floor(t) + 's' : ''}`; }
+  const YT_ERRORS = {
+    2: 'YouTube rejected the video ID.',
+    5: 'YouTube\'s player hit an HTML5 playback error.',
+    100: 'The video was not found (removed or private).',
+    101: 'The owner doesn\'t allow this video to be played in other sites.',
+    150: 'The owner doesn\'t allow this video to be played in other sites.',
+    153: 'YouTube refused to embed it here (missing referrer; this happens when the page is opened as a local file).',
+  };
+  function ytFail(id, msg) {
+    const href = ytWatchUrl(id, localTime());
+    setStatus(`YouTube video ${id}: ${msg}`, 'err');
+    showNotice(`<strong>This YouTube video can't play here.</strong> ${escapeHtml(msg)}
+      <div style="margin-top:6px"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Open on YouTube</a></div>`, true);
+  }
+  async function startYouTube(id, startAt, seq) {
+    if (!YtParse.ID.test(id)) return;
+    destroy();
+    if (CAST.connected) { // our Cast button only sends Hudl streams; YouTube's own player has casting
+      try { CAST.ctx.endCurrentSession(true); } catch (e) {}
+      flash('Stopped casting - use the YouTube player\'s Cast button');
+    }
+    const key = 'yt:' + id;
+    const hint = titleHint && titleHint.key === key ? titleHint : null;
+    titleHint = null;
+    current = { key, id: null, yt: id, url: null, type: 'youtube', input: `https://youtu.be/${id}`,
+                title: hint ? hint.title : '', siteName: hint ? hint.sub : 'YouTube' };
+    pendingStart = Math.max(0, Number(startAt) || 0);
+    YTP.on = true; YTP.id = id; YTP.ready = false;
+    video.hidden = true;
+    $('qualityLbl').hidden = true;
+    renderCastButton();
+    loadBookmarks(); updateUrl(true); showTitle(current);
+    setStatus(`Loading YouTube video ${id}...`);
+    osd.textContent = osdText();
+    try { await loadYtApi(); } catch (e) {
+      if (seq !== loadSeq) return;
+      ytFail(id, e.message || String(e));
+      return;
+    }
+    if (seq !== loadSeq || !YTP.on || YTP.id !== id) return;
+    const host = document.createElement('div'); host.id = 'ytHost';
+    $('videoWrap').insertBefore(host, osd);
+    const vars = { autoplay: 1, playsinline: 1, rel: 0, start: Math.floor(pendingStart) };
+    if (/^https?:$/.test(location.protocol)) vars.origin = location.origin;
+    let player;
+    try {
+      player = new YT.Player(host, {
+        videoId: id, width: '100%', height: '100%', playerVars: vars,
+        events: {
+          onReady: () => {
+            if (YTP.player !== player) return;
+            YTP.ready = true;
+            try { YTP.rates = (player.getAvailablePlaybackRates() || []).map(Number).filter((r) => r > 0).sort((a, b) => a - b); } catch (e) { YTP.rates = null; }
+            if (pendingStart) { try { player.seekTo(pendingStart, true); } catch (e) {} }
+            try { player.playVideo(); } catch (e) {}
+            if (!current.title) {
+              let t = ''; try { t = (player.getVideoData() || {}).title || ''; } catch (e) {}
+              if (t) { current.title = String(t); showTitle(current); }
+            }
+            speedSel.value = '1';
+            setStatus(`YouTube video ${id} - ${fmt(ytDuration())}`);
+          },
+          onError: (e) => {
+            if (YTP.player !== player) return;
+            const code = Number(e && e.data);
+            ytFail(id, (YT_ERRORS[code] || 'YouTube reported an error.') + ` (error ${code})`);
+          },
+          onStateChange: (e) => {
+            if (YTP.player !== player) return;
+            const st = Number(e && e.data);
+            if (st === 1 && pendingStart && Math.abs(ytTime() - pendingStart) < 15) pendingStart = 0;
+            if (st === 1 && YTP.ready && statusEl.className) setStatus(`YouTube video ${id} - ${fmt(ytDuration())}`);
+            if (st === 2 || st === 0) updateUrl(true);
+          },
+          onPlaybackRateChange: (e) => {
+            if (YTP.player !== player) return;
+            const r = Number(e && e.data) || 1;
+            syncSpeedSel(r); osd.textContent = osdText();
+          },
+        },
+      });
+    } catch (e) { ytFail(id, 'Could not start the YouTube player.'); return; }
+    YTP.player = player;
+    clearInterval(YTP.ticker);
+    YTP.ticker = setInterval(() => {
+      if (!YTP.on || YTP.player !== player) return;
+      osd.textContent = osdText();
+      if (YTP.ready) updateUrl(false);
+    }, 250);
+  }
+  function ytState() { try { return YTP.ready ? Number(YTP.player.getPlayerState()) : -1; } catch (e) { return -1; } }
+  function ytRate() { try { return YTP.ready ? Number(YTP.player.getPlaybackRate()) || 1 : 1; } catch (e) { return 1; } }
+  function ytNotReady() { flash(YTP.on ? 'YouTube player still loading' : 'Load a game first'); return false; }
+
+  function start(info, startAt) {
+    destroy();
+    current = info;
+    pendingStart = Math.max(0, Number(startAt) || 0);
+    loadBookmarks();
+    updateUrl(true);
+    showTitle(info);
+    const label = info.id ? `broadcast ${info.id}` : 'stream';
+    setStatus(`Loading ${label}${info.type && info.type !== 'direct' ? ` (${info.type})` : ''}...`);
+
+    if (window.Hls && Hls.isSupported()) {
+      hls = new Hls({
+        autoStartLoad: false,
+        startPosition: pendingStart,
+        maxBufferLength: 30,
+        backBufferLength: 60,
+        enableWorker: true,
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        restrictToAvc();
+        buildQualityMenu();
+        hls.startLoad(pendingStart || -1);
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, d) => updateQualityLabel(d.level));
+      let mediaRecoveries = 0, netRetries = 0;
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (!d.fatal) return;
+        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries++ < 5) {
+          setStatus('Network error, retrying...', 'warn'); setTimeout(() => hls && hls.startLoad(), 1000 * netRetries);
+        } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++ < 3) {
+          setStatus('Media error, recovering...', 'warn'); hls.recoverMediaError();
+        } else {
+          setStatus(`Playback error: ${d.details}`, 'err');
+          showNotice(`<strong>The stream couldn't be played</strong> (${escapeHtml(d.details)}).` +
+            (info.geoblocked ? ' This broadcast is geo-restricted.' : ' It may be unavailable, expired, or restricted.'), true);
+        }
+      });
+      hls.loadSource(info.playUrl || info.url);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = info.url; // Safari native HLS
+    } else {
+      setStatus('This browser cannot play HLS (no MediaSource and no native HLS).', 'err');
+    }
+    if (CAST.connected) castLoad(info, pendingStart); // a game loaded while casting plays on the TV
+  }
+
+  // Keep only H.264 (avc1) variants so non-HEVC browsers play reliably.
+  function restrictToAvc() {
+    const lv = hls.levels || [];
+    const isAvc = (l) => /^avc1/i.test(l.videoCodec || '') || (!l.videoCodec && /avc1/i.test(l.attrs && l.attrs.CODECS || ''));
+    if (!lv.some(isAvc)) return; // nothing to filter (e.g. codecs not declared)
+    for (let i = lv.length - 1; i >= 0; i--) {
+      if (!isAvc(lv[i])) { try { hls.removeLevel(i); } catch (e) {} }
+    }
+  }
+  function levelName(l) { return l.height ? `${l.height}p` : (l.bitrate ? `${Math.round(l.bitrate / 1000)} kbps` : 'Level'); }
+  function buildQualityMenu() {
+    const lv = hls.levels || [];
+    qualitySel.innerHTML = '<option value="-1">Auto</option>' +
+      lv.map((l, i) => ({ l, i })).sort((a, b) => (b.l.height || 0) - (a.l.height || 0) || b.l.bitrate - a.l.bitrate)
+        .map(({ l, i }) => `<option value="${i}">${levelName(l)}</option>`).join('');
+    qualitySel.disabled = lv.length < 2;
+    qualitySel.value = '-1';
+  }
+  function updateQualityLabel(idx) {
+    const autoOpt = qualitySel.querySelector('option[value="-1"]');
+    if (!autoOpt || !hls) return;
+    const l = hls.levels[idx];
+    autoOpt.textContent = hls.autoLevelEnabled && l ? `Auto (${levelName(l)})` : 'Auto';
+  }
+  qualitySel.addEventListener('change', () => {
+    if (!hls) return;
+    hls.currentLevel = Number(qualitySel.value);
+    qualitySel.blur();
+  });
+
+  video.addEventListener('loadedmetadata', () => {
+    // Native HLS (Safari) path: apply start time here; hls.js handles startPosition itself.
+    if (!hls && pendingStart) seekTo(pendingStart);
+    const [a, b] = range();
+    const live = current && current.type === 'live';
+    setStatus(`${current && current.id ? 'Broadcast ' + current.id : 'Stream'}${live ? ' (LIVE, DVR)' : ''} - ${fmt(b - a)} loaded`);
+  });
+  // Once frames at the requested start are ready, stop pinning t to the requested start.
+  video.addEventListener('canplay', () => {
+    if (pendingStart && Math.abs(video.currentTime - pendingStart) < 15) pendingStart = 0;
+    if (playWhenReady && !CAST.connected) { playWhenReady = false; video.play().catch(() => {}); }
+  });
+  video.addEventListener('waiting', () => { if (current && !CAST.connected) osd.textContent = osdText() + ' - buffering'; });
+  // While casting the TV is the player: keep the local video paused.
+  video.addEventListener('play', () => { if (CAST.connected) { video.pause(); flash('Playing on the TV'); } });
+
+  // ---------- transport (routes to the TV while casting) ----------
+  function remoteReady() {
+    const p = CAST.player;
+    return !!(CAST.connected && p && p.isMediaLoaded && current && CAST.loadedKey === current.key);
+  }
+  function remoteTime() {
+    if (remoteReady()) return CAST.player.currentTime || 0;
+    if (current && CAST.timeKey === current.key) return CAST.lastTime;
+    return pendingStart || 0;
+  }
+  function nowTime() { return YTP.on ? ytTime() : CAST.connected ? remoteTime() : (video.currentTime || 0); }
+  function curRange() {
+    if (YTP.on || !CAST.connected) return range();
+    if (!remoteReady()) return [0, 0];
+    const p = CAST.player, lr = p.liveSeekableRange;
+    if (lr && isFinite(lr.end) && lr.end > (lr.start || 0)) return [lr.start || 0, lr.end];
+    return [0, p.duration > 0 ? p.duration : 0];
+  }
+  function notReadyOnTv() { flash(current ? 'Still loading on the TV' : 'Load a game first'); return false; }
+  // Seek to an absolute time; returns false if nothing happened.
+  function seekAbs(t) {
+    if (YTP.on) { if (!YTP.ready) return ytNotReady(); seekTo(t); updateUrl(true); return true; }
+    if (!CAST.connected) { seekTo(t); return true; }
+    if (!remoteReady()) return notReadyOnTv();
+    const [a, b] = curRange();
+    t = b > a ? Math.min(Math.max(t, a), Math.max(a, b - 1)) : Math.max(0, t);
+    CAST.player.currentTime = t;
+    CAST.ctl.seek();
+    CAST.lastTime = t; CAST.timeKey = current.key;
+    renderCastTime(); updateUrl(true);
+    return true;
+  }
+  function seekBy(d) { return seekAbs(nowTime() + d); }
+  function togglePlay() {
+    if (YTP.on) {
+      if (!YTP.ready) { ytNotReady(); return; }
+      const st = ytState();
+      try { if (st === 1 || st === 3) YTP.player.pauseVideo(); else YTP.player.playVideo(); } catch (e) {}
+      return;
+    }
+    if (!CAST.connected) { if (video.paused) video.play().catch(() => {}); else video.pause(); return; }
+    if (remoteReady()) CAST.ctl.playOrPause(); else notReadyOnTv();
+  }
+
+  // ---------- speed / OSD ----------
+  speedSel.innerHTML = SPEEDS.map((s) => `<option value="${s}">${s}x</option>`).join('');
+  speedSel.value = '1';
+  speedSel.addEventListener('change', () => { applyRate(Number(speedSel.value)); speedSel.blur(); });
+  function osdText() {
+    if (YTP.on) return `${ytRate().toFixed(2)}x  ${fmt(ytTime())}`;
+    if (CAST.connected) return `TV ${CAST.rate.toFixed(2)}x  ${fmt(remoteTime())}`;
+    return `${video.playbackRate.toFixed(2)}x  ${fmt(video.currentTime)}`;
+  }
+  video.addEventListener('ratechange', () => {
+    if (CAST.connected || YTP.on) return;
+    const r = video.playbackRate;
+    if (SPEEDS.includes(r)) speedSel.value = String(r);
+    osd.textContent = osdText();
+  });
+  function curRate() { return YTP.on ? ytRate() : CAST.connected ? CAST.rate : video.playbackRate; }
+  function syncSpeedSel(r) { if (SPEEDS.includes(r)) speedSel.value = String(r); }
+  // YouTube only offers some rates (getAvailablePlaybackRates): snap to the nearest one.
+  function ytSnap(r) {
+    const list = YTP.rates && YTP.rates.length ? YTP.rates : SPEEDS;
+    return list.reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a), list[0]);
+  }
+  function applyRate(r) {
+    if (YTP.on) {
+      if (!YTP.ready) { ytNotReady(); syncSpeedSel(1); return r; }
+      r = ytSnap(r);
+      try { YTP.player.setPlaybackRate(r); } catch (e) {}
+      syncSpeedSel(r); osd.textContent = `${r.toFixed(2)}x  ${fmt(ytTime())}`;
+      return r;
+    }
+    if (!CAST.connected) { video.playbackRate = r; return r; }
+    // The Default Media Receiver may ignore SET_PLAYBACK_RATE; check the TV's reported rate afterwards.
+    const s = castSession(), m = s && remoteReady() ? s.getMediaSession() : null;
+    if (!m) { notReadyOnTv(); syncSpeedSel(CAST.rate); return; }
+    try {
+      const p = s.sendMessage('urn:x-cast:com.google.cast.media',
+        { type: 'SET_PLAYBACK_RATE', requestId: Math.floor(Math.random() * 1e9), mediaSessionId: m.mediaSessionId, playbackRate: r });
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+    flash(`${r}x on the TV`);
+    syncSpeedSel(r);
+    clearTimeout(CAST.rateTimer);
+    CAST.rateTimer = setTimeout(() => {
+      const mm = CAST.connected && remoteReady() ? castSession().getMediaSession() : null;
+      const now = mm && typeof mm.playbackRate === 'number' ? mm.playbackRate : CAST.rate;
+      CAST.rate = now; syncSpeedSel(now); renderCastTime();
+      if (mm && Math.abs(now - r) > 1e-3) flash('The TV does not support speed changes');
+    }, 2500);
+  }
+  function setSpeed(dir) {
+    const r = curRate();
+    const list = YTP.on && YTP.rates && YTP.rates.length ? YTP.rates : SPEEDS;
+    let i = list.findIndex((s) => s >= r - 1e-6);
+    if (i < 0) i = list.length - 1;
+    if (dir > 0) i = list[i] > r + 1e-6 ? i : i + 1;
+    else i = i - 1;
+    i = Math.max(0, Math.min(list.length - 1, i));
+    const got = applyRate(list[i]);
+    if (YTP.on ? YTP.ready : !CAST.connected) flash(`${got}x`);
+  }
+
+  // ---------- deep link (?src=&t=, ?site=) ----------
+  // When hosted inside an iframe (e.g. as a claude.ai Artifact) our own URL is not the one the
+  // user sees or can share, so links degrade to plain "ID @ time" text that the input box accepts.
+  const FRAMED = (() => { try { return window.top !== window.self; } catch (e) { return true; } })();
+  const CAN_LINK = !FRAMED && /^(https?|file):$/.test(location.protocol);
+  let lastUrlUpdate = 0;
+  function updateUrl(force) {
+    if (!current || !CAN_LINK) return;
+    const now = Date.now();
+    if (!force && now - lastUrlUpdate < 2000) return;
+    lastUrlUpdate = now;
+    try {
+      const params = new URLSearchParams(location.search);
+      params.set('src', current.id || current.url || current.input || '');
+      params.delete('site');
+      // Until playback has actually positioned itself, keep the requested start time.
+      // While casting, t follows the TV.
+      const t = Math.floor(CAST.connected && !YTP.on ? remoteTime() : (pendingStart || localTime()));
+      if (t > 0) params.set('t', String(t)); else params.delete('t');
+      history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+    } catch (e) {}
+  }
+  function shareRef() { return (current && (current.id || current.input || current.url)) || ''; }
+  function shareText(t) { return `${shareRef()} @ ${fmt(t)}`; }
+  function shareLink(t) {
+    if (!CAN_LINK) return null;
+    try {
+      const params = new URLSearchParams();
+      params.set('src', (current && (current.id || current.url || current.input)) || '');
+      params.set('t', String(Math.floor(t)));
+      const base = location.protocol === 'file:' ? location.href.split(/[?#]/)[0] : `${location.origin}${location.pathname}`;
+      return `${base}?${params.toString()}`;
+    } catch (e) { return null; }
+  }
+  function shareAny(t) { return shareLink(t) || shareText(t); }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+    try { // fallback for frames without clipboard permission
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch (e) { return false; }
+  }
+  video.addEventListener('timeupdate', () => { if (CAST.connected) return; osd.textContent = osdText(); updateUrl(false); });
+  video.addEventListener('seeked', () => { if (!CAST.connected) updateUrl(true); });
+  video.addEventListener('pause', () => updateUrl(true));
+  $('copyLink').addEventListener('click', async () => {
+    if (!current) { flash('Load a game first'); return; }
+    const t = nowTime();
+    const link = shareLink(t);
+    const text = link || shareText(t);
+    if (await copyText(text)) flash(link ? 'Link copied' : 'Copied ' + text);
+    else {
+      // Clipboard (and possibly prompt) blocked, e.g. in a sandboxed frame: show it so it can be copied by hand.
+      setStatus('Copy this: ' + text); flash('Copy from the status bar');
+      try { window.prompt('Copy this:', text); } catch (e) {}
+    }
+  });
+
+  // ---------- bookmarks ----------
+  function bmKey() { return current ? 'hudl-film-viewer:bookmarks:' + current.key : null; }
+  function loadBookmarks() { const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; renderBookmarks(); }
+  function saveBookmarks() { const k = bmKey(); if (k) store(k, bookmarks.length ? bookmarks : null); }
+  function renderBookmarks(focusIdx) {
+    const list = $('bmList');
+    bookmarks.sort((a, b) => a.t - b.t);
+    list.innerHTML = bookmarks.map((b, i) =>
+      `<li data-i="${i}"><button class="t" data-act="seek" title="Seek">${fmt(b.t)}</button>
+         <input data-act="note" value="${escapeHtml(b.note || '')}" placeholder="note..." maxlength="300">
+         <button class="del" data-act="del" title="Delete">&times;</button></li>`).join('');
+    $('bmEmpty').style.display = bookmarks.length ? 'none' : '';
+    updatePanelToggle();
+    // A hidden panel can't take focus: leave focus where it is (the Marked flash still confirms).
+    if (focusIdx != null && !panelCollapsed) { const inp = list.querySelector(`li[data-i="${focusIdx}"] input`); if (inp) inp.focus(); }
+  }
+  function addBookmark() {
+    if (!current) { flash('Load a game first'); return; }
+    const b = { t: Math.round(nowTime() * 10) / 10, note: '', at: Date.now() }; // the TV's time while casting
+    bookmarks.push(b);
+    saveBookmarks();
+    renderBookmarks();
+    renderBookmarks(bookmarks.indexOf(b));
+    flash(`Marked ${fmt(b.t)}`);
+  }
+  $('addBm').addEventListener('click', addBookmark);
+  $('bmList').addEventListener('click', (e) => {
+    const li = e.target.closest('li'); if (!li) return;
+    const i = Number(li.dataset.i), act = e.target.dataset.act;
+    if (act === 'seek') { seekAbs(bookmarks[i].t); if (YTP.on) e.target.blur(); else video.focus(); }
+    else if (act === 'del') { bookmarks.splice(i, 1); saveBookmarks(); renderBookmarks(); }
+  });
+  $('bmList').addEventListener('input', (e) => {
+    if (e.target.dataset.act !== 'note') return;
+    const i = Number(e.target.closest('li').dataset.i);
+    bookmarks[i].note = e.target.value; saveBookmarks();
+  });
+  $('bmList').addEventListener('keydown', (e) => {
+    if (e.target.dataset.act === 'note' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); video.focus(); }
+  });
+  $('exportBm').addEventListener('click', () => {
+    if (!current || !bookmarks.length) { flash('No bookmarks'); return; }
+    const name = current.title ? `${current.title}${current.date ? ' - ' + fmtDate(current.date) : ''}` : '';
+    const head = `Bookmarks - ${current.id ? 'broadcast ' + current.id : current.yt ? 'YouTube ' + current.yt : current.url}${name ? '\n' + name : ''}\nSource: ${current.input || ''}\n\n`;
+    const body = bookmarks.map((b) => `${fmt(b.t).padStart(8)}  ${b.note || ''}\n          ${shareAny(b.t)}`).join('\n');
+    const text = head + body + '\n';
+    copyText(text);
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      a.download = `bookmarks-${current.id || (current.yt ? 'youtube-' + current.yt : 'stream')}.txt`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {}
+    flash('Exported (also copied)');
+  });
+
+  // ---------- collapsible panel ----------
+  function updatePanelToggle() {
+    const btn = $('panelToggle');
+    btn.setAttribute('aria-expanded', String(!panelCollapsed));
+    btn.title = panelCollapsed ? 'Show panel (B)' : 'Hide panel (B)';
+    btn.querySelector('.plbl').textContent = panelCollapsed
+      ? 'Show bookmarks' + (bookmarks.length ? ` (${bookmarks.length})` : '') : 'Hide panel';
+  }
+  function setPanel(collapsed, save) {
+    panelCollapsed = !!collapsed;
+    const body = $('panelBody');
+    // Don't leave focus on an element that is about to be hidden.
+    if (panelCollapsed && body.contains(document.activeElement)) $('panelToggle').focus();
+    $('panel').classList.toggle('collapsed', panelCollapsed);
+    body.hidden = panelCollapsed;
+    updatePanelToggle();
+    if (save) store(LS_PANEL, panelCollapsed || null);
+  }
+  $('panelToggle').addEventListener('click', () => setPanel(!panelCollapsed, true));
+
+  // ---------- browse a school's games ----------
+  let browseState = null; // { slug, page, seq, ...search state } | { seq, yt } for a YouTube list
+  let browseCtx = null;   // directory school or Union preset shown in the panel: { school, union, sources, active }
+  // Server-side filters supported by api/viewer/broadcast (same params BlueFrame's own widget sends):
+  // title (case-insensitive, all words must appear), section_id, after / before (ISO instants).
+  // slug may be a comma-separated list of sites (one query across several schools).
+  function browseUrl(slug, viewerStatus, dir, page, f, perPage) {
+    const sites = String(slug).split(',').map((x) => encodeURIComponent(x.trim())).filter(Boolean).join(',');
+    let u = `${HUDL}/api/viewer/broadcast?sites=${sites}&viewer_status=${viewerStatus}` +
+      `&sort_by=date&sort_dir=${dir}&per_page=${perPage || 30}&page=${page}`;
+    if (f) {
+      if (f.q) u += `&title=${encodeURIComponent(f.q)}`;
+      if (f.section) u += `&section_id=${encodeURIComponent(f.section)}`;
+      if (f.from) u += `&after=${encodeURIComponent(dayBound(f.from, false))}`;
+      if (f.to) u += `&before=${encodeURIComponent(dayBound(f.to, true))}`;
+    }
+    return u;
+  }
+  // browseUrl for the open list: adds the list's fixed title words (e.g. "Union" for Union games) to any search.
+  function bUrl(st, viewerStatus, dir, page, f, perPage) {
+    const q = [st.fixed, f && f.q].filter(Boolean).join(' ');
+    return browseUrl(st.slug, viewerStatus, dir, page, Object.assign({}, f || {}, { q }), perPage);
+  }
+  // "2025-01-31" (a local calendar day) -> ISO instant at the start or end of that day.
+  function dayBound(ymd, end) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    if (!m) return '';
+    const d = end ? new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59, 999) : new Date(+m[1], +m[2] - 1, +m[3]);
+    return isNaN(d) ? '' : d.toISOString();
+  }
+  function gameItem(b, slug) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.dataset.id = String(b.id);
+    const img = b.small_image || b.medium_image;
+    if (img && /^https:\/\//i.test(img)) {
+      const im = document.createElement('img');
+      im.loading = 'lazy'; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = img;
+      im.onerror = () => { im.style.visibility = 'hidden'; };
+      btn.appendChild(im);
+    }
+    const t = document.createElement('div'); t.className = 'gt';
+    const n = document.createElement('div'); n.className = 'gname'; n.textContent = b.title || `Broadcast ${b.id}`;
+    const sub = document.createElement('div'); sub.className = 'gsub';
+    const st = String(b.status || '');
+    const badge = document.createElement('span');
+    badge.className = 'badge' + (/stream|live/i.test(st) ? ' live' : '');
+    badge.textContent = /stream/i.test(st) ? 'LIVE' : (st || '?');
+    sub.appendChild(badge);
+    const other = b.site && String(b.site).toLowerCase() !== String(slug || '').toLowerCase();
+    const bits = [fmtDateTime(b.date), b.section_title, other ? b.site_title : ''].filter(Boolean).map((x) => String(x).trim());
+    sub.appendChild(document.createTextNode(' ' + bits.join(' · ')));
+    t.appendChild(n); t.appendChild(sub); btn.appendChild(t); li.appendChild(btn);
+    return li;
+  }
+  // The browse panel's title row (+ Hudl / YouTube source switch when a directory school or preset is open).
+  function browseHead(titleText) {
+    const head = document.createElement('div'); head.className = 'bhead';
+    const h = document.createElement('strong'); h.textContent = titleText;
+    const close = document.createElement('button'); close.className = 'link'; close.dataset.act = 'close'; close.textContent = 'Close';
+    head.appendChild(h); head.appendChild(close); browseEl.appendChild(head);
+    const ctx = browseCtx;
+    if (ctx && ctx.sources.length > 1) {
+      const tabs = document.createElement('div'); tabs.className = 'srctabs'; tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-label', 'Source');
+      ctx.sources.forEach((src) => {
+        const b = document.createElement('button'); b.type = 'button'; b.dataset.act = 'src'; b.dataset.src = src;
+        b.textContent = src === 'hudl' ? (ctx.union ? 'Hudl: Union games' : 'Hudl games') : (ctx.union ? 'Union YouTube' : 'YouTube');
+        b.setAttribute('aria-pressed', String(ctx.active === src));
+        tabs.appendChild(b);
+      });
+      browseEl.appendChild(tabs);
+    }
+    return h;
+  }
+  // opts: { label, fixed: title words always searched (e.g. "Union"), multi: slug is a comma list of sites, note }
+  async function openBrowse(slugRaw, opts) {
+    opts = opts || {};
+    if (!opts.keepCtx) browseCtx = null; // a plain site browse has no Hudl/YouTube switch
+    let slug;
+    if (opts.multi) slug = String(slugRaw || '').split(',').map((x) => x.trim().toLowerCase()).filter((x) => /^[a-z0-9_-]{2,64}$/.test(x)).join(',');
+    else slug = String(slugRaw || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').replace(/[/?#].*$/, '');
+    if (!slug || (!opts.multi && !/^[a-z0-9_-]{2,64}$/.test(slug))) { browseEl.className = 'open'; browseEl.innerHTML = '<div class="empty">Enter a school\'s site name, e.g. <code>mountmarty</code> (the part after gpacnetwork.com/).</div>'; return; }
+    if (!opts.multi) { siteInput.value = slug; store(LS_SITE, slug); }
+    const seq = (browseState ? browseState.seq : 0) + 1;
+    browseState = { slug, page: 1, seq, fixed: opts.fixed || '', label: opts.label || slug, multi: !!opts.multi };
+    const st0 = browseState;
+    browseEl.className = 'open';
+    browseEl.innerHTML = '';
+    browseHead(st0.label);
+    const ld = document.createElement('div'); ld.className = 'empty'; ld.textContent = 'Loading games...'; browseEl.appendChild(ld);
+    const [live, past] = await Promise.allSettled([
+      jsonp(bUrl(st0, 3, 'asc', 1), 15000),
+      jsonp(bUrl(st0, 4, 'desc', 1), 15000),
+    ]);
+    if (!browseState || browseState.seq !== seq) return;
+    const liveList = live.status === 'fulfilled' && live.value && Array.isArray(live.value.broadcasts) ? live.value.broadcasts : [];
+    const pastList = past.status === 'fulfilled' && past.value && Array.isArray(past.value.broadcasts) ? past.value.broadcasts : [];
+    browseEl.innerHTML = '';
+    const mine = (b) => String(b.site || '').toLowerCase() === slug;
+    const siteTitle = opts.multi ? '' : (pastList.find(mine) || liveList.find(mine) || {}).site_title;
+    browseHead(opts.label ? opts.label : (siteTitle ? `${String(siteTitle).trim()} (${slug})` : slug));
+    if (opts.note) {
+      const d = document.createElement('div'); d.className = 'bstat';
+      const total = past.status === 'fulfilled' ? Number(past.value.item_count) || 0 : 0;
+      d.textContent = (total ? `${total} archived games. ` : '') + opts.note;
+      browseEl.appendChild(d);
+    }
+    if (live.status === 'rejected' && past.status === 'rejected') {
+      const d = document.createElement('div'); d.className = 'empty';
+      d.textContent = `Couldn't load games: ${past.reason && past.reason.message || 'error'}`;
+      browseEl.appendChild(d); return;
+    }
+    if (!liveList.length && !pastList.length) {
+      const d = document.createElement('div'); d.className = 'empty';
+      d.textContent = opts.multi || opts.label ? `No games found on Hudl for ${opts.label || slug}.`
+        : `No games found for "${slug}". Check the site name (the part after gpacnetwork.com/ or in the school's Hudl/BlueFrame page).`;
+      browseEl.appendChild(d); return;
+    }
+    if (opts.multi) slug = ''; // gameItem then names each game's host school
+    // Search bar (previous games only), then the normal list and a results area that replaces it while searching.
+    const st = browseState;
+    st.sections = new Map(); st.rKey = ''; st.rSeq = 0; st.timer = 0;
+    st.bar = buildSearchBar(); browseEl.appendChild(st.bar);
+    st.normal = document.createElement('div'); browseEl.appendChild(st.normal);
+    st.results = document.createElement('div'); st.results.hidden = true; browseEl.appendChild(st.results);
+    if (liveList.length) {
+      const h3 = document.createElement('h3'); h3.textContent = 'Live & upcoming'; st.normal.appendChild(h3);
+      const ul = document.createElement('ul'); ul.className = 'games';
+      liveList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
+    }
+    const h3 = document.createElement('h3'); h3.textContent = 'Recent games'; st.normal.appendChild(h3);
+    const ul = document.createElement('ul'); ul.className = 'games'; ul.id = 'pastGames';
+    pastList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
+    if (!pastList.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No archived games.'; st.normal.appendChild(d); }
+    const pages = past.status === 'fulfilled' ? Number(past.value.num_pages) || 1 : 1;
+    if (pastList.length >= 30 && pages > 1) st.normal.appendChild(moreButton('past'));
+    // Sport list: Hudl's sections endpoint isn't per school, so collect the sections this school actually uses
+    // from what we've loaded plus one background page of its 100 most recent archived games.
+    addSections(st, liveList.concat(pastList));
+    jsonp(bUrl(st, 4, 'desc', 1, null, 100), 15000)
+      .then((r) => { if (browseState === st && r && Array.isArray(r.broadcasts)) addSections(st, r.broadcasts); })
+      .catch(() => {});
+  }
+  function moreButton(list) {
+    const more = document.createElement('button');
+    more.type = 'button'; more.dataset.act = 'more'; more.dataset.list = list; more.textContent = 'Load more'; more.style.marginTop = '8px';
+    return more;
+  }
+  function buildSearchBar() {
+    const bar = document.createElement('div'); bar.className = 'bsearch';
+    // Static markup only; every API-derived value is added later with textContent / option.text.
+    bar.innerHTML =
+      '<input type="search" data-f="q" placeholder="Search previous games: opponent or title word" aria-label="Search previous games" maxlength="100" spellcheck="false" autocomplete="off">' +
+      '<select data-f="section" aria-label="Sport"><option value="">All sports</option></select>' +
+      '<label>From <input type="date" data-f="from" aria-label="From date"></label>' +
+      '<label>To <input type="date" data-f="to" aria-label="To date"></label>' +
+      '<button type="button" class="link" data-act="clear" hidden>Clear</button>';
+    return bar;
+  }
+  function addSections(st, list) {
+    let changed = false;
+    list.forEach((b) => {
+      const id = String(b.section_id || ''), title = String(b.section_title || '').trim();
+      if (/^\d+$/.test(id) && title && !st.sections.has(id)) { st.sections.set(id, title); changed = true; }
+    });
+    if (!changed) return;
+    const sel = st.bar.querySelector('[data-f="section"]'), keep = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    [...st.sections].sort((a, b) => a[1].localeCompare(b[1])).forEach(([id, title]) => {
+      const o = document.createElement('option'); o.value = id; o.text = title; sel.appendChild(o);
+    });
+    sel.value = keep;
+  }
+  function readFilters(st) {
+    const v = (k) => String(st.bar.querySelector(`[data-f="${k}"]`).value || '');
+    const day = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s) && dayBound(s, false) ? s : '');
+    const section = v('section');
+    return { q: v('q').trim().replace(/\s+/g, ' ').slice(0, 100), section: /^\d+$/.test(section) ? section : '', from: day(v('from')), to: day(v('to')) };
+  }
+  function describeFilters(st, f) {
+    const bits = [];
+    if (f.q) bits.push(`"${f.q}"`);
+    if (f.section) bits.push(st.sections.get(f.section) || 'selected sport');
+    if (f.from) bits.push(`from ${f.from}`);
+    if (f.to) bits.push(`to ${f.to}`);
+    return bits.join(', ');
+  }
+  function scheduleSearch(delay) {
+    const st = browseState; if (!st || !st.bar) return;
+    clearTimeout(st.timer);
+    st.timer = setTimeout(() => runSearch(st), delay);
+  }
+  async function runSearch(st, force) {
+    if (!st || browseState !== st || !st.bar) return;
+    clearTimeout(st.timer);
+    const f = readFilters(st), key = JSON.stringify(f);
+    if (key === st.rKey && !force) return;
+    st.rKey = key;
+    const seq = ++st.rSeq;
+    const active = !!(f.q || f.section || f.from || f.to);
+    st.bar.querySelector('[data-act="clear"]').hidden = !active;
+    st.results.innerHTML = '';
+    if (!active) { st.results.hidden = true; st.normal.hidden = false; return; }
+    st.normal.hidden = true; st.results.hidden = false;
+    const stat = document.createElement('div'); stat.className = 'bstat'; stat.setAttribute('role', 'status');
+    stat.textContent = 'Searching all previous games...';
+    st.results.appendChild(stat);
+    let r;
+    try {
+      r = await jsonp(bUrl(st, 4, 'desc', 1, f), 15000);
+      if (r && r.success === false) throw new Error((r.error && r.error.message) || 'Hudl returned an error.');
+    } catch (e) {
+      if (browseState !== st || st.rSeq !== seq) return;
+      st.rKey = ''; // let Enter retry the same query
+      stat.className = 'bstat err'; stat.textContent = `Search failed: ${e.message || e}. Press Enter to retry.`;
+      return;
+    }
+    if (browseState !== st || st.rSeq !== seq) return;
+    const list = Array.isArray(r && r.broadcasts) ? r.broadcasts : [];
+    addSections(st, list);
+    st.rFilters = f; st.rPage = 1;
+    const what = describeFilters(st, f);
+    stat.textContent = '';
+    if (!list.length) {
+      const s = document.createElement('strong'); s.textContent = 'No matches';
+      stat.appendChild(s); stat.appendChild(document.createTextNode(` for ${what} in previous games for ${st.label || st.slug}.`));
+      return;
+    }
+    const total = Number(r.item_count) || list.length;
+    const s = document.createElement('strong'); s.textContent = `${total} ${total === 1 ? 'match' : 'matches'}`;
+    stat.appendChild(s); stat.appendChild(document.createTextNode(` for ${what}`));
+    const ul = document.createElement('ul'); ul.className = 'games'; ul.id = 'searchGames';
+    list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
+    st.results.appendChild(ul);
+    if (list.length >= 30 && (Number(r.num_pages) || 1) > 1) st.results.appendChild(moreButton('results'));
+  }
+  async function loadMore(btn) {
+    if (!browseState) return;
+    const st = browseState, isResults = btn.dataset.list === 'results', seq = st.rSeq;
+    const page = (isResults ? st.rPage : st.page) + 1;
+    btn.disabled = true; btn.textContent = 'Loading...';
+    try {
+      const r = await jsonp(bUrl(st, 4, 'desc', page, isResults ? st.rFilters : null), 15000);
+      if (browseState !== st || (isResults && st.rSeq !== seq)) return;
+      const list = r && Array.isArray(r.broadcasts) ? r.broadcasts : [];
+      const ul = $(isResults ? 'searchGames' : 'pastGames');
+      list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
+      addSections(st, list);
+      if (isResults) st.rPage = page; else st.page = page;
+      if (list.length < 30 || page >= (Number(r.num_pages) || 1)) btn.remove();
+      else { btn.disabled = false; btn.textContent = 'Load more'; }
+    } catch (e) { btn.disabled = false; btn.textContent = 'Load more (retry)'; }
+  }
+  function clearSearch(st) {
+    st.bar.querySelectorAll('[data-f]').forEach((el) => { el.value = ''; });
+    runSearch(st);
+  }
+  browseEl.addEventListener('input', (e) => {
+    const f = e.target.dataset && e.target.dataset.f;
+    if (f === 'q') scheduleSearch(400);
+  });
+  browseEl.addEventListener('change', (e) => {
+    const f = e.target.dataset && e.target.dataset.f;
+    if (f === 'section') runSearch(browseState);
+    else if (f === 'from' || f === 'to') scheduleSearch(400);
+  });
+  browseEl.addEventListener('keydown', (e) => {
+    if (!e.target.dataset || !e.target.dataset.f || !browseState) return;
+    if (e.key === 'Enter') { e.preventDefault(); runSearch(browseState, true); }
+    else if (e.key === 'Escape' && e.target.dataset.f === 'q' && e.target.value) { e.preventDefault(); e.stopPropagation(); e.target.value = ''; runSearch(browseState); }
+  });
+  browseEl.addEventListener('click', (e) => {
+    const el = e.target.closest('button'); if (!el) return;
+    if (el.dataset.act === 'close') { browseEl.className = ''; return; }
+    if (el.dataset.act === 'more') { loadMore(el); return; }
+    if (el.dataset.act === 'clear') { if (browseState && browseState.bar) clearSearch(browseState); return; }
+    if (el.dataset.act === 'src') { showSource(el.dataset.src); return; }
+    if (el.dataset.act === 'ytkind') {
+      const y = browseState && browseState.yt;
+      if (y) openYouTube(y.cid, y.handle, y.name, el.dataset.kind);
+      return;
+    }
+    if (el.dataset.yt && YtParse.ID.test(el.dataset.yt)) {
+      const id = el.dataset.yt;
+      titleHint = { key: 'yt:' + id, title: el.dataset.title || '', sub: el.dataset.sub || 'YouTube' };
+      srcInput.value = `https://youtu.be/${id}`;
+      browseEl.className = '';
+      loadFromInput(srcInput.value, 0);
+      try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
+      return;
+    }
+    if (el.dataset.id) {
+      srcInput.value = el.dataset.id;
+      browseEl.className = '';
+      loadFromInput(el.dataset.id, 0);
+      try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
+    }
+  });
+
+  // ---------- school directory: sources, Union games preset, YouTube channel lists ----------
+  const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/, HANDLE = /^@[A-Za-z0-9._-]{1,100}$/;
+  function schoolSources(sc) {
+    const s = [];
+    if (sc.h && sc.h[0]) s.push('hudl');
+    if (sc.y && (CHANNEL_ID.test(sc.y[0] || '') || HANDLE.test(sc.y[1] || ''))) s.push('yt');
+    return s;
+  }
+  function pickSchool(sc) {
+    const sources = schoolSources(sc);
+    browseCtx = { school: sc, union: false, sources, active: '' };
+    if (!sources.length) { showNoSource(sc); return; }
+    // Default to Hudl when it is current (or the only source), otherwise the school's YouTube.
+    const hudlFirst = sources.includes('hudl') && (sc.h[1] === 'active' || !sources.includes('yt'));
+    showSource(hudlFirst ? 'hudl' : 'yt');
+  }
+  function openUnion() {
+    browseCtx = { school: UNION.school, union: true, sources: ['hudl', 'yt'], active: '' };
+    showSource('hudl');
+  }
+  function showSource(src) {
+    const ctx = browseCtx;
+    if (!ctx || !ctx.sources.includes(src)) return;
+    ctx.active = src;
+    if (ctx.union) {
+      if (src === 'hudl') {
+        openBrowse(UNION.sites.join(','), { multi: true, keepCtx: true, fixed: 'Union', label: 'Union games',
+          note: `Games with "Union" in the title on Union's and ${UNION.sites.length - 1} opponents' Hudl sites, newest first.` });
+      } else openYouTube(UNION.yt[0], UNION.yt[1], UNION.name);
+      return;
+    }
+    const sc = ctx.school;
+    if (src === 'hudl') {
+      const h = sc.h;
+      const note = h[1] === 'active' ? '' : h[1] === 'stale'
+        ? `Hudl looks stale for this school${h[2] ? ' (last game ' + h[2] + ')' : ''}.` : 'The directory found no games on Hudl for this school.';
+      openBrowse(h[0], { keepCtx: true, label: `${sc.n} (${h[0]})`, note });
+    } else openYouTube(sc.y[0], sc.y[1], sc.n);
+  }
+  function showNoSource(sc) {
+    browseState = { seq: (browseState ? browseState.seq : 0) + 1 };
+    browseEl.className = 'open'; browseEl.innerHTML = '';
+    browseHead(sc.n);
+    const d = document.createElement('div'); d.className = 'empty';
+    d.textContent = sc.o ? `Streams on: ${sc.o}${sc.o === 'YouTube' ? ' (channel not in the directory)' : ''}.` : 'No stream source known.';
+    browseEl.appendChild(d);
+  }
+  function ytLink(href, text) {
+    const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = text;
+    return a;
+  }
+  function ytItem(v, channelName) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.dataset.yt = v.id; btn.dataset.title = v.title; btn.dataset.sub = channelName ? `${channelName} · YouTube` : 'YouTube';
+    const im = document.createElement('img');
+    im.loading = 'lazy'; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
+    im.onerror = () => { im.style.visibility = 'hidden'; };
+    btn.appendChild(im);
+    const t = document.createElement('div'); t.className = 'gt';
+    const n = document.createElement('div'); n.className = 'gname'; n.textContent = v.title;
+    const sub = document.createElement('div'); sub.className = 'gsub';
+    const badge = document.createElement('span');
+    badge.className = 'badge' + (v.live ? ' live' : '');
+    badge.textContent = v.live ? 'LIVE' : v.upcoming ? 'Upcoming' : (v.duration || 'YouTube');
+    sub.appendChild(badge);
+    if (v.when) sub.appendChild(document.createTextNode(' ' + v.when));
+    t.appendChild(n); t.appendChild(sub); btn.appendChild(t); li.appendChild(btn);
+    return li;
+  }
+  // A channel's recent videos, read from its public /streams or /videos page via Hudl's fetch proxy
+  // (YouTube's RSS feeds are unavailable and its API needs a key). Only ~30 videos are in that page.
+  async function openYouTube(cid, handle, name, kind) {
+    kind = kind === 'videos' ? 'videos' : 'streams';
+    const base = CHANNEL_ID.test(cid || '') ? `https://www.youtube.com/channel/${cid}`
+      : HANDLE.test(handle || '') ? `https://www.youtube.com/${handle}` : '';
+    const seq = (browseState ? browseState.seq : 0) + 1;
+    browseState = { seq, yt: { cid, handle, name, kind } };
+    browseEl.className = 'open'; browseEl.innerHTML = '';
+    browseHead(`${name} — YouTube`);
+    if (!base) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No YouTube channel known.'; browseEl.appendChild(d); return; }
+    const pageUrl = `${base}/${kind}`;
+    const bar = document.createElement('div'); bar.className = 'srctabs';
+    [['streams', 'Live streams'], ['videos', 'Videos']].forEach(([k, label]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.act = 'ytkind'; b.dataset.kind = k; b.textContent = label;
+      b.setAttribute('aria-pressed', String(k === kind)); bar.appendChild(b);
+    });
+    const note = document.createElement('span'); note.className = 'small';
+    note.appendChild(document.createTextNode('Most recent ~30 from YouTube · '));
+    note.appendChild(ytLink(pageUrl, 'Open on YouTube'));
+    bar.appendChild(note); browseEl.appendChild(bar);
+    const stat = document.createElement('div'); stat.className = 'bstat'; stat.setAttribute('role', 'status');
+    stat.textContent = 'Loading recent videos from YouTube...';
+    browseEl.appendChild(stat);
+    let list = null, err = '';
+    try {
+      let r = await jsonp(`${HUDL}/api/viewer/app/rss?url=${encodeURIComponent(pageUrl)}`, 30000);
+      let html = r && r.success === true && typeof r.contents === 'string' ? r.contents : '';
+      const status = r && r.status; r = null;
+      if (!html) throw new Error(`YouTube didn't return the channel page${status ? ' (HTTP ' + status + ')' : ''}`);
+      const data = YtParse.initialData(html); html = '';
+      if (!data) throw new Error('could not read YouTube\'s page (its format may have changed)');
+      list = YtParse.videos(data);
+    } catch (e) { err = (e && e.message) || String(e); }
+    if (!browseState || browseState.seq !== seq) return;
+    const what = kind === 'streams' ? 'live streams' : 'videos';
+    if (!list) {
+      stat.className = 'bstat err';
+      stat.textContent = `Couldn't load this channel's ${what}: ${err}. `;
+      stat.appendChild(ytLink(pageUrl, 'Open the channel on YouTube'));
+      return;
+    }
+    if (!list.length) {
+      stat.textContent = `No ${what} found on this channel. `;
+      stat.appendChild(ytLink(pageUrl, 'Open the channel on YouTube'));
+      return;
+    }
+    stat.textContent = `${list.length} most recent ${what} (YouTube only shows about 30 here; older ones are on the channel page).`;
+    const ul = document.createElement('ul'); ul.className = 'games';
+    list.forEach((v) => ul.appendChild(ytItem(v, name)));
+    browseEl.appendChild(ul);
+  }
+
+  // ---------- school search box (typeahead over the directory, then Hudl's live site search) ----------
+  const schoolInput = $('school'), schoolList = $('schoolList');
+  let saItems = [], saSel = -1, saTimer = 0, saSeq = 0, saQuery = '';
+  function saClose() {
+    schoolList.hidden = true; schoolInput.setAttribute('aria-expanded', 'false');
+    schoolInput.removeAttribute('aria-activedescendant'); saSel = -1;
+  }
+  function saOpen() { schoolList.hidden = false; schoolInput.setAttribute('aria-expanded', 'true'); }
+  function mkBadge(text, cls, title) {
+    const b = document.createElement('span'); b.className = 'badge' + (cls ? ' ' + cls : ''); b.textContent = text;
+    if (title) b.title = title;
+    return b;
+  }
+  function saAdd(li, item) {
+    li.id = 'sa-' + saItems.length; li.setAttribute('role', 'option'); li.dataset.i = String(saItems.length);
+    saItems.push(item); schoolList.appendChild(li);
+  }
+  function saInfo(cls, text) {
+    const li = document.createElement('li'); li.className = cls; li.setAttribute('role', 'presentation'); li.textContent = text;
+    schoolList.appendChild(li); return li;
+  }
+  function schoolRow(sc) {
+    const li = document.createElement('li');
+    const n = document.createElement('span'); n.className = 'sn'; n.textContent = sc.n; li.appendChild(n);
+    const tag = sc.l === 0 ? 'Union' : sc.l === 1 ? 'Union opponent' : '';
+    const ss = document.createElement('span'); ss.className = 'ss'; ss.textContent = [sc.s, tag].filter(Boolean).join(' · '); li.appendChild(ss);
+    const sb = document.createElement('span'); sb.className = 'sb';
+    if (sc.h) {
+      const st = sc.h[1];
+      sb.appendChild(mkBadge(st === 'active' ? 'Hudl' : `Hudl (${st})`, st === 'active' ? 'on' : st === 'stale' ? 'stale' : 'off',
+        `Hudl site ${sc.h[0]}${sc.h[2] ? ', last game ' + sc.h[2] : ''}`));
+    }
+    if (schoolSources(sc).includes('yt')) sb.appendChild(mkBadge('YouTube', 'on', sc.y[1] || ''));
+    if (sc.o && !(sc.o === 'YouTube' && sc.y)) sb.appendChild(mkBadge(sc.o === 'YouTube' ? 'YouTube (channel unknown)' : sc.o));
+    if (!sb.childNodes.length) sb.appendChild(mkBadge('No stream known', 'off'));
+    li.appendChild(sb);
+    return li;
+  }
+  function hudlRow(site) {
+    const li = document.createElement('li');
+    const n = document.createElement('span'); n.className = 'sn'; n.textContent = String(site.title || site.slug).trim(); li.appendChild(n);
+    const ss = document.createElement('span'); ss.className = 'ss';
+    ss.textContent = [site.city, site.state].filter(Boolean).map((x) => String(x).trim()).join(', ') + ` (${site.slug})`;
+    li.appendChild(ss);
+    const sb = document.createElement('span'); sb.className = 'sb'; sb.appendChild(mkBadge('Hudl site')); li.appendChild(sb);
+    return li;
+  }
+  function saRender(raw) {
+    const q = String(raw || '').trim();
+    saQuery = q; saSeq++;
+    schoolList.innerHTML = ''; saItems = []; saSel = -1;
+    if (!q) { saClose(); return; }
+    const res = schoolIndex.search(q, 12);
+    if (res.length) saInfo('hdr', 'Directory');
+    res.forEach(({ sc }) => saAdd(schoolRow(sc), { sc }));
+    if (!res.length) { saHudl(q); }
+    else if (SchoolSearch.norm(q).length >= 3) {
+      const li = document.createElement('li'); li.className = 'ss';
+      li.textContent = `Search all Hudl schools for "${q}"`;
+      saAdd(li, { hudlSearch: q });
+    }
+    saOpen();
+  }
+  // Fallback: Hudl's own site list (any school on Hudl), substring match on the site title.
+  async function saHudl(q) {
+    const seq = ++saSeq;
+    [...schoolList.querySelectorAll('li')].forEach((li) => { if (li.dataset.i && saItems[+li.dataset.i] && saItems[+li.dataset.i].hudlSearch) li.remove(); });
+    const msg = saInfo('msg', `Searching Hudl for "${q}"...`);
+    saOpen();
+    let sites = [], err = '';
+    try {
+      const r = await jsonp(`${HUDL}/api/viewer/site?title=${encodeURIComponent(q.slice(0, 100))}&per_page=100`, 15000);
+      sites = (r && Array.isArray(r.sites) ? r.sites : []).filter((s) => s && /^[A-Za-z0-9_-]{2,64}$/.test(String(s.slug || '')));
+    } catch (e) { err = (e && e.message) || 'error'; }
+    if (seq !== saSeq) return;
+    msg.remove();
+    if (err) { saInfo('msg', `Hudl search failed: ${err}`); return; }
+    if (!sites.length) { saInfo('msg', `No school named "${q}" in the directory or on Hudl.`); return; }
+    saInfo('hdr', 'Hudl sites');
+    sites.slice(0, 50).forEach((s) => saAdd(hudlRow(s), { site: { slug: String(s.slug).toLowerCase(), title: String(s.title || s.slug).trim() } }));
+  }
+  function saHighlight(i) {
+    const lis = schoolList.querySelectorAll('li[role="option"]');
+    if (!lis.length) return;
+    saSel = (i + lis.length) % lis.length;
+    lis.forEach((li, k) => { li.classList.toggle('sel', k === saSel); li.setAttribute('aria-selected', String(k === saSel)); });
+    const cur = lis[saSel];
+    schoolInput.setAttribute('aria-activedescendant', cur.id);
+    try { cur.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  }
+  function saPick(item) {
+    if (!item) return;
+    if (item.hudlSearch) { saHudl(item.hudlSearch); schoolInput.focus(); return; }
+    saClose();
+    if (item.sc) { schoolInput.value = item.sc.n; schoolInput.blur(); pickSchool(item.sc); return; }
+    if (item.site) { schoolInput.value = item.site.title; schoolInput.blur(); openBrowse(item.site.slug); }
+  }
+  schoolInput.addEventListener('input', () => { clearTimeout(saTimer); saTimer = setTimeout(() => saRender(schoolInput.value), 120); });
+  schoolInput.addEventListener('focus', () => { if (schoolInput.value.trim() && schoolList.hidden && saItems.length) saOpen(); });
+  schoolInput.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== schoolInput) saClose(); }, 150));
+  schoolInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (schoolList.hidden) { saRender(schoolInput.value); return; }
+      saHighlight(saSel < 0 ? (e.key === 'ArrowDown' ? 0 : -1) : saSel + (e.key === 'ArrowDown' ? 1 : -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(saTimer);
+      if (saQuery !== schoolInput.value.trim()) saRender(schoolInput.value);
+      const lis = schoolList.querySelectorAll('li[role="option"]');
+      const li = lis[saSel >= 0 ? saSel : 0];
+      if (li) saPick(saItems[+li.dataset.i]);
+    } else if (e.key === 'Escape') {
+      if (!schoolList.hidden) { e.preventDefault(); e.stopPropagation(); saClose(); }
+    }
+  });
+  schoolList.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the box
+  schoolList.addEventListener('click', (e) => {
+    const li = e.target.closest('li[role="option"]'); if (!li) return;
+    saPick(saItems[+li.dataset.i]);
+  });
+  $('unionBtn').addEventListener('click', () => { saClose(); openUnion(); $('unionBtn').blur(); });
+
+  // ---------- keyboard ----------
+  function isTyping(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+  window.addEventListener('keydown', (e) => {
+    if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    let handled = true;
+    switch (true) {
+      case k === ' ': togglePlay(); break;
+      case k === 'ArrowLeft': if (seekBy(-(e.shiftKey ? 30 : 5))) flash(e.shiftKey ? '-30s' : '-5s'); break;
+      case k === 'ArrowRight': if (seekBy(e.shiftKey ? 30 : 5)) flash(e.shiftKey ? '+30s' : '+5s'); break;
+      case k === 'j' || k === 'J': if (seekBy(-10)) flash('-10s'); break;
+      case k === 'k' || k === 'K': if (seekBy(10)) flash('+10s'); break;
+      case k === ',' || k === '<' || k === '.' || k === '>':
+        if (YTP.on) { // YouTube: pause, then seek 1/30 s (YouTube may show the nearest decodable frame)
+          if (!YTP.ready) { ytNotReady(); break; }
+          const base = ytTime();
+          try { YTP.player.pauseVideo(); } catch (err) {}
+          seekTo(base + (k === ',' || k === '<' ? -FRAME : FRAME)); updateUrl(true);
+          break;
+        }
+        if (CAST.connected) { flash('Frame step is off while casting'); break; }
+        video.pause(); seekTo(video.currentTime + (k === ',' || k === '<' ? -FRAME : FRAME)); break;
+      case k === '[' || k === 'ArrowDown': setSpeed(-1); break;
+      case k === ']' || k === 'ArrowUp': setSpeed(1); break;
+      case k === '\\': applyRate(1); if (!CAST.connected) flash('1x'); break;
+      case /^[0-9]$/.test(k) && !e.shiftKey: {
+        const [a, b] = curRange();
+        if (b > a) { if (seekAbs(a + (b - a) * Number(k) / 10)) flash(`${k}0%`); }
+        else if (CAST.connected) notReadyOnTv();
+        break;
+      }
+      case k === 'm' || k === 'M': addBookmark(); break;
+      case k === 'b' || k === 'B': setPanel(!panelCollapsed, true); break;
+      case k === 'f' || k === 'F':
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        else if ($('videoWrap').requestFullscreen) $('videoWrap').requestFullscreen().catch(() => {});
+        break;
+      default: handled = false;
+    }
+    if (handled) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  // ---------- cast: what to send the TV (pure; no DOM or Cast SDK use) ----------
+  /* CAST-PLAN-BEGIN */
+  const CastPlan = (() => {
+    const LEGACY = /^https:\/\/vcloud\.hudl\.com\/file\/broadcast\/\d+\.m3u8(\?|$)/i;
+    const MAX_BYTES = 65536; // playlists are read only this far (enough for the header and first segments)
+    function absUrl(u, base) { try { return new URL(u, base).href; } catch (e) { return null; } }
+    function attrs(s) {
+      const out = {}, re = /([A-Z0-9-]+)=("([^"]*)"|[^,]*)/g;
+      let m;
+      while ((m = re.exec(s))) out[m[1]] = m[3] != null ? m[3] : m[2];
+      return out;
+    }
+    // Variant streams of a master playlist, with absolute https URLs.
+    function variants(text, base) {
+      const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()), out = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (!/^#EXT-X-STREAM-INF:/i.test(lines[i])) continue;
+        const a = attrs(lines[i].slice(lines[i].indexOf(':') + 1));
+        let j = i + 1;
+        while (j < lines.length && (!lines[j] || lines[j][0] === '#')) j++;
+        const url = j < lines.length ? absUrl(lines[j], base) : null;
+        if (url && /^https:\/\//i.test(url)) out.push({ url, bandwidth: Number(a.BANDWIDTH) || 0, codecs: a.CODECS || '' });
+      }
+      return out;
+    }
+    // Highest-bandwidth H.264 (avc1) variant; HEVC-only declarations are skipped when an avc1 one exists.
+    function pickVariant(list) {
+      if (!list.length) return null;
+      const avc = list.filter((v) => /avc1/i.test(v.codecs));
+      const pool = avc.length ? avc : (list.some((v) => !v.codecs) ? list.filter((v) => !v.codecs) : list);
+      return pool.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a));
+    }
+    // 'fmp4' | 'ts' | null, from a media playlist.
+    function segmentFormat(text) {
+      const t = String(text || '');
+      if (!/#EXTINF/i.test(t)) return null;
+      if (/#EXT-X-MAP:/i.test(t)) return 'fmp4';
+      for (const raw of t.split(/\r?\n/)) {
+        const l = raw.trim();
+        if (!l || l[0] === '#') continue;
+        const path = l.split(/[?#]/)[0].toLowerCase();
+        if (/\.(m4s|mp4|m4v|cmfv)$/.test(path)) return 'fmp4';
+        if (/\.ts$/.test(path)) return 'ts';
+        return null;
+      }
+      return null;
+    }
+    // Used only when the playlists can't be read: Hudl's video.ondemand.m3u8 is fMP4, .live.m3u8 usually MPEG-TS.
+    function guessFormat(url) {
+      const p = String(url || '').split(/[?#]/)[0].toLowerCase();
+      return /\.ondemand\.m3u8$/.test(p) && !/\.live\./.test(p) ? 'fmp4' : 'ts';
+    }
+    // Values of the Cast HlsSegmentFormat / HlsVideoSegmentFormat enums.
+    function formatFields(fmt) {
+      return fmt === 'fmp4' ? { hlsSegmentFormat: 'fmp4', hlsVideoSegmentFormat: 'fmp4' }
+                            : { hlsSegmentFormat: 'ts', hlsVideoSegmentFormat: 'mpeg2_ts' };
+    }
+    // io.fetchText(url) -> Promise<{ text, complete } | null>   (CORS fetch, first MAX_BYTES)
+    // io.legacyText(url) -> Promise<string | null>             (legacy master via the JSONP proxy)
+    // -> { sources: [{ url, fmt }, ...] in the order to try, streamType: 'LIVE'|'BUFFERED', detected, legacy }
+    async function build(info, io) {
+      const url = info.url, legacy = LEGACY.test(url);
+      let master = null, media = null, variant = null;
+      try {
+        if (legacy) { const t = await io.legacyText(url); master = t ? { text: t, complete: true } : null; }
+        else master = await io.fetchText(url);
+      } catch (e) { master = null; }
+      const mText = (master && master.text) || '';
+      if (/#EXT-X-STREAM-INF/i.test(mText)) {
+        variant = pickVariant(variants(mText, url));
+        if (variant) { try { media = await io.fetchText(variant.url); } catch (e) { media = null; } }
+      } else if (/#EXTINF/i.test(mText)) media = master; // the URL is already a media playlist
+      const found = media && segmentFormat(media.text);
+      const fmt = found || guessFormat(url);
+      let live = info.type === 'live';
+      if (!live && info.type !== 'archive' && media && media.complete) {
+        live = !/#EXT-X-ENDLIST/i.test(media.text) && !/#EXT-X-PLAYLIST-TYPE:VOD/i.test(media.text);
+      }
+      const main = { url, fmt };
+      const alt = variant && variant.url !== url ? { url: variant.url, fmt } : null;
+      // Legacy masters have no CORS header, so the TV can only read their (CloudFront) variants.
+      const sources = legacy ? [alt || main] : (alt ? [main, alt] : [main]);
+      return { sources, streamType: live ? 'LIVE' : 'BUFFERED', detected: !!found, legacy };
+    }
+    return { LEGACY, MAX_BYTES, variants, pickVariant, segmentFormat, guessFormat, formatFields, build };
+  })();
+  /* CAST-PLAN-END */
+
+  // Read the start of a CORS-enabled text resource (Hudl's CDN and CloudFront send Access-Control-Allow-Origin: *).
+  async function fetchHead(url) {
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ac) ac.abort(); }, 10000);
+    try {
+      const r = await fetch(url, { credentials: 'omit', signal: ac ? ac.signal : undefined });
+      if (!r.ok) return null;
+      if (!r.body || !r.body.getReader) { const t = await r.text(); return { text: t.slice(0, CastPlan.MAX_BYTES), complete: t.length <= CastPlan.MAX_BYTES }; }
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let text = '', complete = false;
+      while (text.length < CastPlan.MAX_BYTES) {
+        const { done, value } = await reader.read();
+        if (done) { complete = true; break; }
+        text += dec.decode(value, { stream: true });
+      }
+      if (!complete) { try { reader.cancel(); } catch (e) {} }
+      return { text, complete };
+    } catch (e) { return null; } finally { clearTimeout(timer); }
+  }
+
+  // ---------- casting (Google Cast Web Sender, Default Media Receiver) ----------
+  const castBtn = $('castBtn'), castHelp = $('castHelp'), castOverlay = $('castOverlay');
+  const castDevEl = castOverlay.querySelector('.cdev'), castStateEl = castOverlay.querySelector('.cstate');
+  const IS_FILE = location.protocol === 'file:';
+  function castSession() { try { return CAST.ctx ? CAST.ctx.getCurrentSession() : null; } catch (e) { return null; } }
+  function deviceName() {
+    try { const s = castSession(), d = s && s.getCastDevice(); return (d && d.friendlyName) || ''; } catch (e) { return ''; }
+  }
+  // Last Cast init outcome, for bug reports (shown in the Cast button / hint tooltips; also window.__castDiag).
+  const castDiag = window.__castDiag = { loader: '', sdkLoaded: false, isAvailable: null, reason: '', castState: '' };
+  function castDiagText() {
+    const d = castDiag;
+    return `Cast diag: loader=${d.loader || '-'}, sdkLoaded=${d.sdkLoaded}, isAvailable=${d.isAvailable}` +
+      `${d.reason ? ', reason=' + d.reason : ''}${d.castState ? ', state=' + d.castState : ''}`;
+  }
+  const CAST_MIRROR = 'use Chrome’s ⋮ > Cast… to mirror this tab.';
+  function renderCastButton() {
+    // Show the button whenever the Cast context is up. Don't hide it on NO_DEVICES_AVAILABLE: Chrome often doesn't
+    // discover devices until its Cast dialog opens, and requestSession() opens that dialog and does its own discovery.
+    const show = !!CAST.ctx;
+    try { if (CAST.ctx) castDiag.castState = String(CAST.ctx.getCastState()); } catch (e) {}
+    // YouTube videos are cast from the YouTube player's own Cast button, so ours is hidden then.
+    castBtn.hidden = !show || YTP.on;
+    if (!CAST.connected) castBtn.title = `Cast to a Chromecast / Google TV\n${castDiagText()}`;
+    // One muted, collapsed hint, only where Cast can't work (local file, no Google Cast, or the SDK failed).
+    castHelp.hidden = YTP.on || show || !(IS_FILE || CAST.unsupported || CAST.failed);
+    castHelp.querySelector('span').textContent = (IS_FILE
+      ? 'Casting needs this page served from a web address (e.g. GitHub Pages) — or ' + CAST_MIRROR
+      : CAST.unsupported ? 'Casting needs Chrome or Edge.' : 'Cast isn’t available here — ' + CAST_MIRROR) + ` (${castDiagText()})`;
+    castHelp.querySelector('summary').title = `Why is there no Cast button?\n${castDiagText()}`;
+  }
+  function castUnavailable(reason) {
+    CAST.unsupported = reason === 'browser';
+    CAST.failed = !CAST.unsupported;
+    renderCastButton();
+  }
+  function renderCast() {
+    const on = CAST.connected;
+    castOverlay.hidden = !on;
+    castBtn.classList.toggle('on', on);
+    castBtn.querySelector('span').textContent = on ? 'Stop casting' : 'Cast';
+    castBtn.title = on ? 'Stop casting and continue here' : `Cast to a Chromecast / Google TV\n${castDiagText()}`;
+    // The native controls would drive the (paused) local video, so hide them while casting.
+    if (on) video.removeAttribute('controls'); else video.setAttribute('controls', '');
+    if (on) { if (!CAST.device) CAST.device = deviceName(); castDevEl.textContent = `Casting to ${CAST.device || 'TV'}`; }
+    renderCastTime();
+  }
+  function renderCastTime() {
+    if (!CAST.connected) return;
+    let st;
+    if (!current) st = 'Load a game to play it on the TV';
+    else if (CAST.error) st = CAST.error;
+    else if (!remoteReady()) st = 'Loading on the TV...';
+    else {
+      const p = CAST.player, [a, b] = curRange();
+      const word = p.playerState === 'BUFFERING' ? 'Buffering' : (p.isPaused ? 'Paused' : 'Playing');
+      const live = CAST.plan && CAST.plan.streamType === 'LIVE';
+      st = `${word} · ${fmt(remoteTime())}${!live && b > a ? ' / ' + fmt(b) : ''}${live ? ' (LIVE)' : ''}`;
+    }
+    castStateEl.textContent = st;
+    osd.textContent = osdText();
+  }
+
+  function loadRequest(info, plan, src, t) {
+    const mi = new chrome.cast.media.MediaInfo(src.url, 'application/x-mpegurl');
+    mi.contentUrl = src.url;
+    mi.streamType = plan.streamType === 'LIVE' ? chrome.cast.media.StreamType.LIVE : chrome.cast.media.StreamType.BUFFERED;
+    const f = CastPlan.formatFields(src.fmt);
+    mi.hlsSegmentFormat = f.hlsSegmentFormat;
+    mi.hlsVideoSegmentFormat = f.hlsVideoSegmentFormat;
+    const md = new chrome.cast.media.GenericMediaMetadata();
+    md.title = info.title || (info.id ? `Broadcast ${info.id}` : 'Game film');
+    const sub = [info.siteName, info.date ? fmtDate(info.date) : ''].filter(Boolean).join(' · ');
+    if (sub) md.subtitle = sub;
+    mi.metadata = md;
+    const req = new chrome.cast.media.LoadRequest(mi);
+    req.autoplay = true;
+    if (t != null) req.currentTime = Math.max(0, t);
+    return req;
+  }
+
+  // Load `info` on the TV at time t (or keep it if the TV is already playing this stream, e.g. a re-joined session).
+  async function castLoad(info, t) {
+    const s = castSession();
+    if (!CAST.connected || !s || !info || !info.url) return;
+    const seq = ++CAST.loadSeq;
+    t = Math.max(0, Number(t) || 0);
+    CAST.loadedKey = null; CAST.error = ''; CAST.plan = null; CAST.timeKey = info.key; CAST.lastTime = t;
+    video.pause();
+    renderCast();
+    let plan;
+    try { plan = await CastPlan.build(info, { fetchText: fetchHead, legacyText: fetchLegacyText }); }
+    catch (e) { plan = { sources: [{ url: info.url, fmt: CastPlan.guessFormat(info.url) }], streamType: info.type === 'live' ? 'LIVE' : 'BUFFERED' }; }
+    if (seq !== CAST.loadSeq || castSession() !== s) return;
+    CAST.plan = plan;
+    const m = s.getMediaSession();
+    if (m && m.media && plan.sources.some((x) => x.url === m.media.contentId)) {
+      CAST.loadedKey = info.key;
+      const est = m.getEstimatedTime ? m.getEstimatedTime() : 0;
+      if (t && Math.abs(est - t) > 5) {
+        const sr = new chrome.cast.media.SeekRequest(); sr.currentTime = t;
+        m.seek(sr, () => {}, () => {});
+      } else CAST.lastTime = est;
+      watchMedia(s, m, seq, info, []);
+      renderCast();
+      return;
+    }
+    castTry(s, seq, info, plan.sources.slice(), t);
+  }
+  function castTry(s, seq, info, list, t) {
+    const src = list.shift();
+    if (!src) {
+      CAST.error = "The TV couldn't play this game.";
+      setStatus("The TV couldn't play this game. Stop casting to watch it here.", 'err');
+      renderCast();
+      return;
+    }
+    let at = t;
+    if (CAST.plan.streamType === 'LIVE') { const [a, b] = range(); if (!(b > a && b - t > 30)) at = null; } // null = live edge
+    s.loadMedia(loadRequest(info, CAST.plan, src, at)).then(() => {
+      if (seq !== CAST.loadSeq) return;
+      CAST.loadedKey = info.key; CAST.error = '';
+      watchMedia(s, s.getMediaSession(), seq, info, list);
+      renderCast();
+    }, () => {
+      if (seq !== CAST.loadSeq || castSession() !== s) return;
+      castTry(s, seq, info, list, t); // e.g. the master failed: try the direct H.264 variant
+    });
+  }
+  function watchMedia(s, m, seq, info, rest) {
+    if (!m) return;
+    CAST.rate = typeof m.playbackRate === 'number' ? m.playbackRate : 1;
+    syncSpeedSel(CAST.rate);
+    let failedOver = false;
+    m.addUpdateListener(() => {
+      if (seq !== CAST.loadSeq) return;
+      if (typeof m.playbackRate === 'number' && m.playbackRate !== CAST.rate) { CAST.rate = m.playbackRate; syncSpeedSel(CAST.rate); }
+      if (!failedOver && m.playerState === 'IDLE' && m.idleReason === 'ERROR') {
+        failedOver = true;
+        CAST.loadedKey = null;
+        castTry(s, seq, info, rest, CAST.lastTime);
+      }
+      renderCastTime();
+    });
+  }
+
+  function onConnectedChanged() {
+    const p = CAST.player;
+    if (p.isConnected && !CAST.connected) {
+      CAST.connected = true; CAST.device = deviceName(); CAST.error = ''; CAST.rate = 1;
+      const t = pendingStart || video.currentTime || 0;
+      playWhenReady = false;
+      video.pause();
+      speedSel.value = '1';
+      renderCast(); renderCastButton();
+      if (current && current.url) castLoad(current, t);
+    } else if (!p.isConnected && CAST.connected) {
+      const mine = !!(current && CAST.timeKey === current.key), wasLoaded = !!(current && CAST.loadedKey === current.key);
+      let t = CAST.lastTime, paused = CAST.lastPaused;
+      const saved = p.savedPlayerState;
+      if (wasLoaded && saved && saved.mediaInfo && CAST.plan && CAST.plan.sources.some((x) => x.url === saved.mediaInfo.contentId)) {
+        if (isFinite(saved.currentTime) && saved.currentTime > 0) t = saved.currentTime;
+        if (typeof saved.isPaused === 'boolean') paused = saved.isPaused;
+      }
+      CAST.connected = false; CAST.loadSeq++; CAST.loadedKey = null; CAST.plan = null; CAST.error = ''; CAST.device = '';
+      clearTimeout(CAST.rateTimer);
+      syncSpeedSel(video.playbackRate);
+      renderCast(); renderCastButton();
+      osd.textContent = osdText();
+      if (mine && current.url) resumeLocal(t, wasLoaded && !paused);
+      flash('Stopped casting');
+    }
+  }
+  function resumeLocal(t, play) {
+    if (video.readyState >= 1) { seekTo(t); if (play) video.play().catch(() => {}); }
+    else { pendingStart = t; playWhenReady = !!play; if (hls) { hls.stopLoad(); hls.startLoad(t); } }
+    updateUrl(true);
+  }
+  function onRemoteTime() {
+    const p = CAST.player;
+    if (!remoteReady() || p.playerState === 'IDLE') return;
+    CAST.lastTime = p.currentTime || 0; CAST.timeKey = current.key; CAST.lastPaused = !!p.isPaused;
+    renderCastTime();
+    updateUrl(false);
+  }
+  function initCast() {
+    try {
+      const ctx = cast.framework.CastContext.getInstance();
+      ctx.setOptions({
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+      });
+      CAST.ctx = ctx;
+      CAST.player = new cast.framework.RemotePlayer();
+      CAST.ctl = new cast.framework.RemotePlayerController(CAST.player);
+      const E = cast.framework.RemotePlayerEventType;
+      CAST.ctl.addEventListener(E.IS_CONNECTED_CHANGED, onConnectedChanged);
+      CAST.ctl.addEventListener(E.CURRENT_TIME_CHANGED, onRemoteTime);
+      CAST.ctl.addEventListener(E.IS_PAUSED_CHANGED, () => {
+        if (remoteReady()) CAST.lastPaused = !!CAST.player.isPaused;
+        renderCastTime(); updateUrl(true);
+      });
+      CAST.ctl.addEventListener(E.PLAYER_STATE_CHANGED, renderCastTime);
+      CAST.ctl.addEventListener(E.IS_MEDIA_LOADED_CHANGED, renderCastTime);
+      CAST.ctl.addEventListener(E.DURATION_CHANGED, renderCastTime);
+      ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, renderCastButton);
+      renderCastButton();
+      if (CAST.player.isConnected) onConnectedChanged(); // re-joined an existing session
+    } catch (e) {
+      CAST.ctx = null;
+      castDiag.reason = 'init failed: ' + ((e && e.message) || e);
+      castUnavailable('sdk');
+    }
+  }
+  // requestSession() opens Chrome's device picker (which does its own discovery). It rejects with a
+  // chrome.cast.ErrorCode string; 'cancel' just means the user closed the picker.
+  function castRequestFailed(e) {
+    const code = String((e && (e.code || e.message)) || e || 'error');
+    castDiag.reason = 'requestSession: ' + code;
+    if (code === 'cancel') return;
+    flash(`Cast failed (${code})`);
+    setStatus(`Cast failed (${code}). Try Chrome’s ⋮ > Cast… instead.`, 'err');
+  }
+  castBtn.addEventListener('click', () => {
+    if (!CAST.ctx) return;
+    if (CAST.connected) { try { CAST.ctx.endCurrentSession(true); } catch (e) {} }
+    else { try { const p = CAST.ctx.requestSession(); if (p && p.catch) p.catch(castRequestFailed); } catch (e) { castRequestFailed(e); } }
+    castBtn.blur();
+  });
+
+  // Load the Cast sender. On http(s) use Google's documented loader. On file:// that loader can't work (it uses
+  // protocol-relative "//www.gstatic.com/..." URLs, which become file://www.gstatic.com/..., a Windows network-share
+  // path), so there we load the same scripts it would, with explicit https: URLs.
+  function loadCastSdk() {
+    const ua = navigator.userAgent, m = /Chrome\/(\d+)/.exec(ua), major = m ? Number(m[1]) : 0;
+    castDiag.loader = IS_FILE ? 'manual' : 'official';
+    // /Edge\// is legacy (EdgeHTML) Edge only; Chromium Edge says "Edg/".
+    if (!window.chrome || !navigator.presentation || !major || /Edge\//.test(ua)) {
+      castDiag.loader = 'none'; castDiag.reason = 'browser without Google Cast';
+      castUnavailable('browser'); return;
+    }
+    let settled = false;
+    const fail = (reason) => {
+      if (settled) return;
+      settled = true; castDiag.reason = castDiag.reason || reason || 'unavailable';
+      castUnavailable('sdk');
+    };
+    const ok = () => { if (!settled) { settled = true; castDiag.isAvailable = true; initCast(); } };
+    const add = (src) => new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.async = true; s.src = src;
+      s.onload = () => res();
+      s.onerror = () => { s.remove(); rej(new Error('load failed')); };
+      document.head.appendChild(s);
+    });
+    setTimeout(() => fail('timed out after 20s'), 20000);
+    if (!IS_FILE) {
+      // Must be defined before the loader runs; it calls back (isAvailable, reason).
+      window.__onGCastApiAvailable = (isAvailable, reason) => {
+        castDiag.isAvailable = !!isAvailable;
+        if (isAvailable) ok(); else fail('isAvailable=false' + (reason ? ': ' + reason : ''));
+      };
+      add('https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1')
+        .then(() => { castDiag.sdkLoaded = true; }, () => fail('loader script failed to load'));
+      return;
+    }
+    let apiReady = false, fwReady = false;
+    const ready = () => { if (apiReady && fwReady) { castDiag.sdkLoaded = true; ok(); } };
+    window.__onGCastApiAvailable = (isAvailable, reason) => {
+      castDiag.isAvailable = !!isAvailable;
+      if (isAvailable) { apiReady = true; ready(); } else fail('isAvailable=false' + (reason ? ': ' + reason : ''));
+    };
+    const G = 'https://www.gstatic.com';
+    add(`${G}/cast/sdk/libs/sender/1.0/cast_framework.js`).then(() => { fwReady = true; ready(); }, () => fail('cast_framework.js failed to load'));
+    const senders = [`${G}/eureka/clank/${major}/cast_sender.js`, `${G}/eureka/clank/${major - 1}/cast_sender.js`, `${G}/eureka/clank/cast_sender.js`];
+    (function next() { if (!senders.length) { fail('no cast_sender.js loaded'); return; } add(senders.shift()).catch(next); })();
+  }
+
+  // ---------- wiring ----------
+  $('loadBtn').addEventListener('click', () => loadFromInput(srcInput.value, 0));
+  srcInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); loadFromInput(srcInput.value, 0); srcInput.blur(); }
+  });
+  $('browseBtn').addEventListener('click', () => openBrowse(siteInput.value));
+  siteInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); openBrowse(siteInput.value); siteInput.blur(); }
+  });
+
+  setPanel(load(LS_PANEL, false) === true, false);
+  let qs;
+  try { qs = new URLSearchParams(location.search); } catch (e) { qs = new URLSearchParams(); }
+  const lastSite = load(LS_SITE, '');
+  if (typeof lastSite === 'string' && lastSite) siteInput.value = lastSite;
+  if (qs.get('site')) openBrowse(qs.get('site'));
+  if (qs.get('src')) {
+    srcInput.value = qs.get('src');
+    loadFromInput(qs.get('src'), Number(qs.get('t')) || 0);
+  }
+  try { loadCastSdk(); } catch (e) { castDiag.reason = 'loadCastSdk threw: ' + ((e && e.message) || e); castUnavailable('sdk'); }
+})();
+</script>
+</body>
+</html>
