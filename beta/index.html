@@ -121,8 +121,15 @@
   #status { color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
   #status.err { color: var(--err); }
   #status.warn { color: var(--warn); }
-  aside { width: 300px; flex: 0 0 300px; background: var(--panel); border-left: 1px solid var(--border); display: flex;
-    flex-direction: column; min-height: 0; }
+  aside { width: var(--panel-w, 300px); flex: 0 0 var(--panel-w, 300px); background: var(--panel); border-left: 1px solid var(--border); display: flex;
+    flex-direction: column; min-height: 0; position: relative; }
+  /* drag handle on the panel's left edge (wide layout only) */
+  #panelResize { position: absolute; left: -5px; top: 0; bottom: 0; width: 10px; cursor: col-resize; z-index: 5; touch-action: none; }
+  #panelResize::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: transparent; transition: background .15s; }
+  #panelResize:hover::after, #panelResize.drag::after, #panelResize:focus-visible::after { background: var(--accent); }
+  #panelResize:focus-visible { outline: none; }
+  aside.collapsed #panelResize { display: none; }
+  #dragShield { position: fixed; inset: 0; z-index: 1000; cursor: col-resize; touch-action: none; }
   aside section { padding: 10px 16px; border-bottom: 1px solid var(--border); }
   aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px;
     display: flex; justify-content: space-between; align-items: center; }
@@ -169,6 +176,7 @@
   @media (max-width: 860px) {
     main { flex-direction: column; }
     aside { width: auto; flex: none; border-left: none; border-top: 1px solid var(--border); }
+    #panelResize { display: none; } /* panel sits below the video here: no width to resize */
     video, #ytHost { max-height: 60vh; }
     #bmSection { max-height: 40vh; }
     #panelToggle svg { transform: rotate(90deg); }
@@ -228,6 +236,8 @@
     </div>
   </div>
   <aside id="panel">
+    <div id="panelResize" role="separator" aria-orientation="vertical" aria-controls="panel" aria-label="Resize panel" tabindex="0"
+         title="Drag to resize the panel (arrow keys too; double-click to reset)"></div>
     <button id="panelToggle" type="button" aria-expanded="true" aria-controls="panelBody" title="Hide panel (B)"><span class="plbl">Hide panel</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></button>
     <div id="panelBody">
     <section id="bmSection">
@@ -716,6 +726,8 @@
       try { playUrl = await legacyManifest(info.url); } catch (e) { playUrl = null; }
       if (seq !== loadSeq) return;
     }
+    // The Hudl site box shows the playing game's school (not whatever was browsed or played before).
+    if (/^[a-z0-9_-]{2,64}$/i.test(info.siteSlug || '')) siteInput.value = info.siteSlug.toLowerCase();
     start({ key: id, id, url: info.url, playUrl, type: info.type, input: text, title: info.title, date: info.date,
             status: info.status, siteName: info.siteName, geoblocked: info.geoblocked }, startAt);
   }
@@ -750,7 +762,10 @@
     return manifestBlobUrl;
   }
 
+  const BASE_TITLE = document.title;
   function showTitle(info) {
+    // The tab title follows the game too, so it never keeps the previous game's name.
+    document.title = info && info.title ? `${info.title} — ${BASE_TITLE}` : BASE_TITLE;
     if (!info || !info.title) { gameTitleEl.style.display = 'none'; gameTitleEl.textContent = ''; return; }
     gameTitleEl.textContent = info.title + (info.date ? ` — ${fmtDate(info.date)}` : '');
     const sub = [info.siteName, info.status].filter(Boolean).join(' · ');
@@ -823,9 +838,10 @@
     YTP.on = true; YTP.id = id; YTP.ready = false;
     video.hidden = true;
     $('qualityLbl').hidden = true;
+    siteInput.value = ''; // a YouTube video has no Hudl site
     renderCastButton();
     loadBookmarks(); updateUrl(true); showTitle(current);
-    setStatus(`Loading YouTube video ${id}...`);
+    setStatus('Loading YouTube video...');
     osd.textContent = osdText();
     try { await loadYtApi(); } catch (e) {
       if (seq !== loadSeq) return;
@@ -853,7 +869,7 @@
               if (t) { current.title = String(t); showTitle(current); }
             }
             speedSel.value = '1';
-            setStatus(`YouTube video ${id} - ${fmt(ytDuration())}`);
+            ytStatus();
           },
           onError: (e) => {
             if (YTP.player !== player) return;
@@ -864,7 +880,7 @@
             if (YTP.player !== player) return;
             const st = Number(e && e.data);
             if (st === 1 && pendingStart && Math.abs(ytTime() - pendingStart) < 15) pendingStart = 0;
-            if (st === 1 && YTP.ready && statusEl.className) setStatus(`YouTube video ${id} - ${fmt(ytDuration())}`);
+            if (st === 1 && YTP.ready && statusEl.className) ytStatus();
             if (st === 2 || st === 0) updateUrl(true);
           },
           onPlaybackRateChange: (e) => {
@@ -881,7 +897,14 @@
       if (!YTP.on || YTP.player !== player) return;
       osd.textContent = osdText();
       if (YTP.ready) updateUrl(false);
+      // The duration is often still 0 at onReady: fill it in once YouTube knows it.
+      if (YTP.ready && !statusEl.className && YTP.shownDur !== Math.round(ytDuration())) ytStatus();
     }, 250);
+  }
+  function ytStatus() {
+    const d = Math.round(ytDuration());
+    YTP.shownDur = d;
+    setStatus(d > 0 ? `YouTube video - ${fmt(d)}` : 'YouTube video');
   }
   function ytState() { try { return YTP.ready ? Number(YTP.player.getPlayerState()) : -1; } catch (e) { return -1; } }
   function ytRate() { try { return YTP.ready ? Number(YTP.player.getPlaybackRate()) || 1 : 1; } catch (e) { return 1; } }
@@ -1219,6 +1242,54 @@
     if (save) store(LS_PANEL, panelCollapsed || null);
   }
   $('panelToggle').addEventListener('click', () => setPanel(!panelCollapsed, true));
+
+  // ---------- resizable panel (wide layout; the width lives in --panel-w so the narrow layout ignores it) ----------
+  const LS_PANEL_W = 'hudl-film-viewer:panelWidth';
+  const PANEL_DEFAULT = 300, PANEL_MIN = 220, PANEL_MAX = 640, VIDEO_MIN = 480; // the video keeps at least VIDEO_MIN px
+  const resizeEl = $('panelResize');
+  let panelW = PANEL_DEFAULT;
+  function panelMax() { return Math.max(PANEL_MIN, Math.min(PANEL_MAX, window.innerWidth - VIDEO_MIN)); }
+  function setPanelWidth(w, save) {
+    panelW = Math.round(Math.min(panelMax(), Math.max(PANEL_MIN, Number(w) || PANEL_DEFAULT)));
+    document.documentElement.style.setProperty('--panel-w', panelW + 'px');
+    resizeEl.setAttribute('aria-valuenow', String(panelW));
+    resizeEl.setAttribute('aria-valuemin', String(PANEL_MIN));
+    resizeEl.setAttribute('aria-valuemax', String(panelMax()));
+    if (save) store(LS_PANEL_W, panelW === PANEL_DEFAULT ? null : panelW);
+  }
+  resizeEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || panelCollapsed) return;
+    e.preventDefault();
+    const startX = e.clientX, startW = panelW;
+    // A full-page shield keeps the pointer from being swallowed by the YouTube iframe while dragging.
+    const shield = document.createElement('div'); shield.id = 'dragShield'; document.body.appendChild(shield);
+    try { resizeEl.setPointerCapture(e.pointerId); } catch (err) {}
+    resizeEl.classList.add('drag');
+    const move = (ev) => setPanelWidth(startW + (startX - ev.clientX), false); // handle is on the left edge
+    const end = () => {
+      resizeEl.removeEventListener('pointermove', move); shield.removeEventListener('pointermove', move);
+      resizeEl.removeEventListener('pointerup', end); resizeEl.removeEventListener('pointercancel', end);
+      shield.removeEventListener('pointerup', end);
+      shield.remove(); resizeEl.classList.remove('drag');
+      setPanelWidth(panelW, true);
+    };
+    resizeEl.addEventListener('pointermove', move); shield.addEventListener('pointermove', move);
+    resizeEl.addEventListener('pointerup', end); resizeEl.addEventListener('pointercancel', end);
+    shield.addEventListener('pointerup', end);
+  });
+  resizeEl.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 60 : 20;
+    if (e.key === 'ArrowLeft') setPanelWidth(panelW + step, true);
+    else if (e.key === 'ArrowRight') setPanelWidth(panelW - step, true);
+    else if (e.key === 'Home') setPanelWidth(PANEL_MIN, true);
+    else if (e.key === 'End') setPanelWidth(panelMax(), true);
+    else if (e.key === 'Enter') setPanelWidth(PANEL_DEFAULT, true);
+    else return;
+    e.preventDefault();
+  });
+  resizeEl.addEventListener('dblclick', () => setPanelWidth(PANEL_DEFAULT, true));
+  window.addEventListener('resize', () => setPanelWidth(load(LS_PANEL_W, PANEL_DEFAULT), false)); // re-clamp to the window
+  setPanelWidth(load(LS_PANEL_W, PANEL_DEFAULT), false);
 
   // ---------- browse a school's games ----------
   let browseState = null; // { slug, page, seq, ...search state } | { seq, yt } for a YouTube list
@@ -1871,6 +1942,7 @@
   }
   window.addEventListener('keydown', (e) => {
     if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target === resizeEl && /^(Arrow(Left|Right)|Home|End|Enter)$/.test(e.key)) return; // the focused handle resizes
     const k = e.key;
     let handled = true;
     switch (true) {

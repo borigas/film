@@ -6,6 +6,10 @@ Served at **https://film.origas.org/beta/**. It is the main viewer (see `../READ
 
 Every Hudl game list (Browse, a picked school, Union games, `?site=` links) opens with **Sport** set to **Men's Basketball**, for both Live & upcoming and Recent games. Pick **All sports** or another sport in the menu to switch. If a school has no Men's Basketball games, the list says so and shows all sports instead. Men's Basketball also includes games filed under the generic "Basketball" sport (as Mount Marty does), except ones whose title says women's (Women's, Lady, WBB, (W) ...) without also saying men's. Because of that filter, the archived count is shown as "up to N" when it can't be exact. Pick **Basketball** in the menu to see the generic sport on its own.
 
+## Panel size
+
+Drag the left edge of the bookmarks/shortcuts panel to resize it (or focus the edge and use the arrow keys; double-click resets). The size is remembered. On narrow screens the panel sits below the video and isn't resizable.
+
 ## School search
 
 Type in the **School** box. Matches come from a built-in directory of 229 schools (Union Adventist, its opponents and their opponents). Case and punctuation don't matter. Partial words, word starts and initials all match, e.g. `Bellevue`, `neb wes`, `occ` (Ozark Christian College) and `Ozark`. Union and its opponents are listed first. Each result shows the state and badges: **Hudl** (or Hudl stale/none), **YouTube**, or another platform.
