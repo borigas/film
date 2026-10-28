@@ -1,0 +1,1421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Film Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.20/hls.min.js"></script>
+<script>window.Hls || document.write('<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"><\/script>');</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eef0f3; --panel: #ffffff; --panel2: #f3f5f8; --border: #d5d9e0;
+    --text: #15181d; --muted: #5b6472; --accent: #1f6fe0; --accent-text: #ffffff;
+    --warn: #9a5b00; --warn-bg: #fff5e0; --err: #c62828; --live: #d32f2f;
+    --stage: #000000; --overlay: rgba(0,0,0,.65); --overlay-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0e1013; --panel: #171a1f; --panel2: #1e222a; --border: #2a2f39;
+      --text: #e6e8eb; --muted: #8b93a1; --accent: #4f9cff; --accent-text: #ffffff;
+      --warn: #ffb347; --warn-bg: #2a2416; --err: #ff6b6b; --live: #ff5252;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1013; --panel: #171a1f; --panel2: #1e222a; --border: #2a2f39;
+    --text: #e6e8eb; --muted: #8b93a1; --accent: #4f9cff; --accent-text: #ffffff;
+    --warn: #ffb347; --warn-bg: #2a2416; --err: #ff6b6b; --live: #ff5252;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: var(--panel);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0 8px 0 0; white-space: nowrap; }
+  .row { display: flex; gap: 8px; align-items: center; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
+  .row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  input[type=text] { flex: 1 1 220px; min-width: 0; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 14px; }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #site { flex: 0 1 200px; }
+  button, select { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }
+  #notice { display: none; margin: 10px 16px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 8px;
+    background: var(--warn-bg); overflow-wrap: anywhere; }
+  #notice.err { border-color: var(--err); }
+  #notice code { background: var(--panel2); padding: 1px 4px; border-radius: 3px; }
+  #notice ul { margin: 6px 0 0; padding-left: 20px; }
+  /* browse */
+  #browse { display: none; margin: 0; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+    max-height: 55vh; overflow: auto; }
+  #browse.open { display: block; }
+  #browse h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 6px; }
+  #browse h3:first-child { margin-top: 0; }
+  .bhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  [hidden] { display: none !important; }
+  .bsearch { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0 2px; padding: 6px 0;
+    position: sticky; top: -10px; z-index: 1; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .bsearch input[type=search] { flex: 1 1 220px; min-width: 0; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 14px; }
+  .bsearch input:focus, .bsearch select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .bsearch select { max-width: 100%; min-width: 0; }
+  .bsearch label { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); min-width: 0; }
+  .bsearch input[type=date] { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 6px; font: inherit; font-size: 13px; min-width: 0; max-width: 150px; }
+  .bstat { margin: 8px 0 6px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .bstat strong { color: var(--text); }
+  .bstat.err { color: var(--err); }
+  .games { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+  .games button { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 6px; }
+  .games img { width: 88px; height: 50px; object-fit: cover; border-radius: 4px; background: var(--stage); flex: none; }
+  .games .gt { min-width: 0; flex: 1; }
+  .games .gname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .games .gsub { font-size: 12px; color: var(--muted); }
+  .badge { display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.live { border-color: var(--live); color: var(--live); font-weight: 600; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #gameTitle { padding: 6px 16px; font-weight: 600; background: var(--panel); border-bottom: 1px solid var(--border); display: none;
+    overflow-wrap: anywhere; }
+  #gameTitle .sub { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  #videoWrap { position: relative; flex: 1; background: var(--stage); display: flex; align-items: center; justify-content: center; min-height: 200px; }
+  video { width: 100%; height: 100%; max-height: calc(100vh - 150px); background: var(--stage); display: block; }
+  #osd { position: absolute; top: 10px; right: 12px; background: var(--overlay); color: var(--overlay-text); padding: 4px 9px; border-radius: 5px;
+    font-variant-numeric: tabular-nums; font-size: 13px; pointer-events: none; transition: opacity .3s; }
+  #flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--overlay); color: var(--overlay-text);
+    padding: 10px 16px; border-radius: 8px; font-size: 18px; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  #bar { display: flex; gap: 8px; align-items: center; padding: 6px 16px; background: var(--panel); border-top: 1px solid var(--border);
+    flex-wrap: wrap; font-size: 13px; }
+  #bar .spacer { flex: 1; }
+  #status { color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+  #status.err { color: var(--err); }
+  #status.warn { color: var(--warn); }
+  aside { width: 300px; flex: 0 0 300px; background: var(--panel); border-left: 1px solid var(--border); display: flex;
+    flex-direction: column; min-height: 0; }
+  aside section { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px;
+    display: flex; justify-content: space-between; align-items: center; }
+  #bmSection { flex: 1; overflow: auto; min-height: 120px; }
+  #bmList { list-style: none; margin: 0; padding: 0; }
+  #bmList li { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  #bmList .t { font-variant-numeric: tabular-nums; color: var(--accent); background: none; border: none; padding: 2px 4px; }
+  #bmList input { flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; color: var(--text); padding: 3px 5px; border-radius: 4px; }
+  #bmList input:focus { border-color: var(--accent); outline: none; background: var(--panel2); }
+  #bmList .del { background: none; border: none; color: var(--muted); padding: 2px 6px; }
+  #bmList .del:hover { color: var(--err); }
+  .empty { color: var(--muted); font-size: 13px; }
+  #legend { font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+  kbd { background: var(--panel2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
+    font: 11px ui-monospace, Consolas, monospace; white-space: nowrap; }
+  .small { font-size: 12px; color: var(--muted); }
+  /* casting */
+  #castBtn { display: inline-flex; gap: 6px; align-items: center; }
+  #castBtn svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+  #castBtn.on { color: var(--accent); border-color: var(--accent); }
+  #castHelp { font-size: 12px; color: var(--muted); min-width: 0; }
+  #castHelp summary { cursor: pointer; list-style: none; white-space: nowrap; }
+  #castHelp summary::-webkit-details-marker { display: none; }
+  #castHelp[open] { flex: 1 1 100%; order: 10; overflow-wrap: anywhere; }
+  #castHelp[open] summary { display: inline; margin-right: 6px; }
+  #castOverlay { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); max-width: calc(100% - 32px);
+    background: var(--overlay); color: var(--overlay-text); padding: 10px 16px; border-radius: 8px; text-align: center;
+    pointer-events: none; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  #castOverlay .cdev { font-weight: 600; }
+  #castOverlay .cstate { font-size: 13px; opacity: .9; }
+  @media (max-width: 860px) {
+    main { flex-direction: column; }
+    aside { width: auto; flex: none; border-left: none; border-top: 1px solid var(--border); }
+    video { max-height: 60vh; }
+    #bmSection { max-height: 40vh; }
+  }
+  @media (max-width: 480px) {
+    header h1 { flex: 1 1 100%; }
+    #site { flex: 1 1 140px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Game Film Viewer</h1>
+  <div class="row">
+    <input id="src" type="text" spellcheck="false" autocomplete="off"
+           placeholder="Paste a game link, embed code, broadcast ID, or .m3u8 URL" aria-label="Game link">
+    <button id="loadBtn" class="primary">Load</button>
+  </div>
+  <div class="row">
+    <label for="site">Browse school</label>
+    <input id="site" type="text" spellcheck="false" autocomplete="off" placeholder="e.g. mountmarty" aria-label="School site slug">
+    <button id="browseBtn">Browse</button>
+  </div>
+</header>
+
+<div id="notice" role="status"></div>
+<div id="browse" aria-label="School games"></div>
+
+<main>
+  <div id="stage">
+    <div id="gameTitle"></div>
+    <div id="videoWrap">
+      <video id="video" controls playsinline preload="auto"></video>
+      <div id="osd">1.00x</div>
+      <div id="castOverlay" hidden><div class="cdev"></div><div class="cstate"></div></div>
+      <div id="flash"></div>
+    </div>
+    <div id="bar">
+      <span id="status">Paste a game link and press Load, or browse a school's games.</span>
+      <span class="spacer"></span>
+      <label>Quality <select id="quality" disabled><option value="-1">Auto</option></select></label>
+      <label>Speed <select id="speed"></select></label>
+      <button id="castBtn" type="button" hidden title="Cast to a Chromecast / Google TV"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><span>Cast</span></button>
+      <details id="castHelp" hidden><summary title="Why is there no Cast button?">Cast?</summary><span></span></details>
+      <button id="copyLink" title="Copy a link (or a timestamp) that resumes at the current time">Copy link</button>
+    </div>
+  </div>
+  <aside>
+    <section id="bmSection">
+      <h2>Bookmarks <span>
+        <button id="addBm" title="Mark current time (M)">+ Mark</button>
+        <button id="exportBm" title="Download bookmarks as text">Export</button>
+      </span></h2>
+      <ul id="bmList"></ul>
+      <div id="bmEmpty" class="empty">Press <kbd>M</kbd> to mark the current time.</div>
+    </section>
+    <section>
+      <h2>Shortcuts</h2>
+      <div id="legend">
+        <span><kbd>Space</kbd></span><span>Play / pause</span>
+        <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd></span><span>Back / forward 5s</span>
+        <span><kbd>J</kbd> <kbd>K</kbd></span><span>Back / forward 10s</span>
+        <span><kbd>Shift</kbd>+<kbd>&larr;</kbd><kbd>&rarr;</kbd></span><span>Back / forward 30s</span>
+        <span><kbd>,</kbd> <kbd>.</kbd></span><span>Frame step (pauses; off while casting)</span>
+        <span><kbd>&darr;</kbd> <kbd>&uarr;</kbd></span><span>Slower / faster (also <kbd>[</kbd> <kbd>]</kbd>)</span>
+        <span><kbd>\</kbd></span><span>Reset speed to 1x</span>
+        <span><kbd>0</kbd>&ndash;<kbd>9</kbd></span><span>Jump to 0&ndash;90%</span>
+        <span><kbd>M</kbd></span><span>Add bookmark</span>
+        <span><kbd>F</kbd></span><span>Fullscreen</span>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const video = $('video'), srcInput = $('src'), statusEl = $('status'), osd = $('osd'), flashEl = $('flash');
+  const qualitySel = $('quality'), speedSel = $('speed'), noticeEl = $('notice'), browseEl = $('browse');
+  const siteInput = $('site'), gameTitleEl = $('gameTitle');
+  const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const FRAME = 1 / 30;
+  const HUDL = 'https://vcloud.hudl.com';
+  const LS_SITE = 'hudl-film-viewer:lastSite';
+
+  let hls = null;
+  let current = null;   // { key, id, url, type, input, title, date, status, siteName }
+  let pendingStart = 0;
+  let bookmarks = [];
+  let loadSeq = 0;
+  let playWhenReady = false; // resume local playback once frames are ready (after casting ends)
+  // Cast state. connected = a Cast session is up (local video stays paused, controls drive the TV).
+  // loadedKey = the game (current.key) the TV is playing; timeKey/lastTime = last known TV time for that game.
+  const CAST = { ctx: null, player: null, ctl: null, connected: false, device: '', loadSeq: 0, loadedKey: null,
+                 timeKey: null, lastTime: 0, lastPaused: false, plan: null, error: '', rate: 1, rateTimer: 0, unsupported: false };
+
+  // ---------- utils ----------
+  function fmt(t) {
+    if (!isFinite(t) || t < 0) t = 0;
+    const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t % 60);
+    const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
+    return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+  }
+  function parseTime(s) { // "1:23:20", "83:20", "5000" -> seconds
+    if (!s) return 0;
+    const parts = String(s).trim().split(':').map(Number);
+    if (parts.some((n) => !isFinite(n) || n < 0)) return 0;
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  }
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    try { return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return d.toDateString(); }
+  }
+  function fmtDateTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    try { return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    catch (e) { return d.toString(); }
+  }
+  function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = cls || ''; }
+  let flashTimer;
+  function flash(msg) {
+    flashEl.textContent = msg; flashEl.style.opacity = 1;
+    clearTimeout(flashTimer); flashTimer = setTimeout(() => (flashEl.style.opacity = 0), 600);
+  }
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  // Seekable window [start, end] (works for VOD and live/DVR)
+  function range() {
+    const s = video.seekable;
+    if (s && s.length) return [s.start(0), s.end(s.length - 1)];
+    return [0, isFinite(video.duration) ? video.duration : 0];
+  }
+  function seekTo(t) {
+    const [a, b] = range();
+    if (b > a) t = Math.min(Math.max(t, a), Math.max(a, b - 0.1));
+    else t = Math.max(0, t);
+    video.currentTime = t;
+  }
+
+  // ---------- JSONP (Hudl endpoints send no CORS headers, but serve JS callbacks) ----------
+  let jsonpSeq = 0;
+  function jsonp(url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const name = 'gfvcb' + Date.now().toString(36) + (jsonpSeq++);
+      const s = document.createElement('script');
+      let settled = false, timer = 0;
+      const finish = () => {
+        settled = true; clearTimeout(timer); s.onerror = null;
+        if (s.parentNode) s.parentNode.removeChild(s);
+      };
+      const dropGlobal = () => { try { delete window[name]; } catch (e) { window[name] = undefined; } };
+      window[name] = (data) => { if (settled) return; finish(); dropGlobal(); resolve(data); };
+      s.onerror = () => { if (settled) return; finish(); dropGlobal(); reject(new Error('Could not reach Hudl (network error or blocked).')); };
+      timer = setTimeout(() => {
+        if (settled) return;
+        finish();
+        // A late response may still arrive: keep a no-op callback around briefly so it doesn't throw.
+        window[name] = () => {}; setTimeout(dropGlobal, 60000);
+        reject(new Error('Hudl did not respond in time.'));
+      }, timeoutMs || 15000);
+      s.async = true;
+      s.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + name;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Resolve a broadcast ID to its stream URL via Hudl's server-side fetch proxy.
+  // The VMAP contains analytics credentials; only the fields below are kept. It is never logged, shown or stored.
+  async function lookupBroadcast(id) {
+    const vmapUrl = `${HUDL}/api/broadcast/vmap/${encodeURIComponent(id)}`;
+    let data = await jsonp(`${HUDL}/api/viewer/app/rss?url=${encodeURIComponent(vmapUrl)}`, 15000);
+    try {
+      if (!data || data.success !== true || typeof data.contents !== 'string') {
+        const c = data && data.contents;
+        const msg = (c && typeof c === 'object' && c.error && c.error.message) || (data && data.status ? `HTTP ${data.status}` : 'Unexpected response');
+        throw new Error(String(msg));
+      }
+      const doc = new DOMParser().parseFromString(data.contents, 'text/xml');
+      if (doc.getElementsByTagName('parsererror').length) throw new Error('Could not read the broadcast info.');
+      const first = (tag) => doc.getElementsByTagName(tag)[0] || null;
+      const childText = (el, tag) => { const c = el && el.getElementsByTagName(tag)[0]; return c ? c.textContent.trim() : ''; };
+      const attr = (el, a, child) => (el && (el.getAttribute(a) || childText(el, child || a))) || '';
+      const b = first('Broadcast'), site = first('Site'), content = first('Content');
+      const info = {
+        id: attr(b, 'id') || String(id),
+        title: attr(b, 'title', 'Title'),
+        date: attr(b, 'date', 'Date'),
+        status: attr(b, 'status', 'Status'),
+        siteName: attr(site, 'name', 'Name'),
+        siteSlug: attr(site, 'slug', 'Slug'),
+        url: '', type: '', geoblocked: false,
+      };
+      if (content) {
+        const u = content.textContent.trim();
+        if (/^https:\/\/\S+$/i.test(u) && !/\.mp4(\?|$)/i.test(u)) info.url = u;
+        info.type = content.getAttribute('type') || '';
+        info.geoblocked = content.getAttribute('geoblocked') === 'true';
+      }
+      return info;
+    } finally {
+      data = null; // drop the raw response (and its credentials) right away
+    }
+  }
+
+  // ---------- input parsing ----------
+  // Returns { id } | { url } | { none: true, slug? } | null (empty)
+  function parseInput(raw) {
+    const s = (raw || '').trim().replace(/&amp;/gi, '&');
+    if (!s) return null;
+    let m;
+    if ((m = /[?&#]B=(\d+)/.exec(s))) return { id: m[1] };                         // 1. GPAC ?B=
+    if ((m = /[?&#]bfplayvid=(\d+)/i.exec(s))) return { id: m[1] };                // 2. BlueFrame share link
+    if ((m = /\/broadcast\/embed\/(\d+)/i.exec(s))) return { id: m[1] };           // 3. embed URL / <iframe> snippet
+    if ((m = /\/api\/broadcast\/vmap\/(\d+)/i.exec(s))) return { id: m[1] };       // 4. VMAP URL
+    if (/\.m3u8(\?|#|$|["'\s])/i.test(s)) {                                       // 5. direct HLS
+      const u = /https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/i.exec(s);
+      return { url: u ? u[0] : s };
+    }
+    if (/^\d{1,10}$/.test(s)) return { id: s };                                    // 6. bare ID
+    const runs = s.match(/\d{6,}/g);                                               // 7. last long digit run
+    if (runs) return { id: runs[runs.length - 1] };
+    return { none: true, slug: guessSlug(s) };
+  }
+  // Prefill the Browse slug only for sites we know map to a Hudl site slug.
+  const KNOWN_SITES = { 'occambassadors.com': 'occambassadors' };
+  function guessSlug(s) {
+    const g = /gpacnetwork\.com\/([a-z0-9_-]+)/i.exec(s);
+    if (g) return g[1].toLowerCase();
+    const h = /^(?:[a-z]+:\/\/)?([^/?#:\s]+)/i.exec(s);
+    const host = h ? h[1].toLowerCase().replace(/^www\./, '') : '';
+    return KNOWN_SITES[host] || '';
+  }
+
+  // ---------- notice ----------
+  function showNotice(html, isErr) {
+    noticeEl.innerHTML = html;
+    noticeEl.className = isErr ? 'err' : '';
+    noticeEl.style.display = 'block';
+  }
+  function hideNotice() { noticeEl.style.display = 'none'; noticeEl.innerHTML = ''; }
+  function helpNoId(slug) {
+    return `<strong>No game ID found in that link.</strong> School pages like <code>.../watch-live</code> don't include one.
+     <ul>
+       <li>Use <strong>Browse school</strong> above with the school's site name (e.g. <code>occambassadors</code> or <code>mountmarty</code>) and pick the game from the list.` +
+       (slug ? ` The list for <code>${escapeHtml(slug)}</code> is open below.` : '') + `</li>
+       <li>On a GPAC Network page, open the game so the address shows <code>?B=</code>, then paste that address.</li>
+     </ul>`;
+  }
+
+  // ---------- loading ----------
+  async function loadFromInput(raw, startAt) {
+    hideNotice();
+    let text = (raw || '').trim();
+    // Accept "4679968 @ 1:23:20" (what Copy link produces when a URL can't be built)
+    const at = /\s*@\s*(\d+(?::\d{1,2}){0,2})\s*$/.exec(text);
+    if (at) { if (!startAt) startAt = parseTime(at[1]); text = text.slice(0, at.index).trim(); }
+    const p = parseInput(text);
+    if (!p) { setStatus('Paste a game link first.', 'warn'); return; }
+    if (p.none) {
+      setStatus('Could not find a broadcast ID or .m3u8 URL in that input.', 'err');
+      showNotice(helpNoId(p.slug), true);
+      if (p.slug) { siteInput.value = p.slug; openBrowse(p.slug); }
+      return;
+    }
+    const seq = ++loadSeq;
+    browseEl.className = '';
+    if (p.url) {
+      start({ key: 'url:' + p.url.split('?')[0], id: null, url: p.url, type: 'direct', input: text }, startAt);
+      return;
+    }
+    const id = p.id;
+    destroy();
+    current = { key: id, id, url: null, type: null, input: text };
+    pendingStart = Math.max(0, Number(startAt) || 0);
+    loadBookmarks(); updateUrl(true); showTitle(null);
+    setStatus(`Looking up broadcast ${id}...`);
+    let info;
+    try {
+      info = await lookupBroadcast(id);
+    } catch (e) {
+      if (seq !== loadSeq) return;
+      setStatus(`Lookup failed for ${id}: ${e.message || e}`, 'err');
+      showNotice(`<strong>Couldn't find a stream for broadcast ${escapeHtml(id)}.</strong> ${escapeHtml(e.message || String(e))}
+        <div class="small" style="margin-top:6px">Check the link or ID. This lookup uses an undocumented Hudl endpoint; if it keeps failing, Hudl may have changed it.</div>`, true);
+      return;
+    }
+    if (seq !== loadSeq) return;
+    if (!info.url) {
+      showTitle(info);
+      const st = info.status ? ` (status: ${info.status})` : '';
+      setStatus(`No playable stream for broadcast ${id}${st}.`, 'err');
+      showNotice(`<strong>No stream is available for this broadcast yet${escapeHtml(st)}.</strong> Upcoming games get a stream when they go live.`, true);
+      return;
+    }
+    let playUrl = null;
+    if (LEGACY_M3U8.test(info.url) && window.Hls && Hls.isSupported()) {
+      try { playUrl = await legacyManifest(info.url); } catch (e) { playUrl = null; }
+      if (seq !== loadSeq) return;
+    }
+    start({ key: id, id, url: info.url, playUrl, type: info.type, input: text, title: info.title, date: info.date,
+            status: info.status, siteName: info.siteName, geoblocked: info.geoblocked }, startAt);
+  }
+
+  // Older archived games resolve to a vcloud.hudl.com master playlist that is served without CORS headers,
+  // although the variant playlists and segments it lists (CloudFront) allow any origin. Fetch just the master
+  // through the same JSONP proxy used for the lookup and give hls.js a blob: copy. Returns null if unusable.
+  const LEGACY_M3U8 = /^https:\/\/vcloud\.hudl\.com\/file\/broadcast\/\d+\.m3u8(\?|$)/i;
+  let manifestBlobUrl = null;
+  let legacyCache = { url: '', text: '' }; // last validated legacy master (also used to pick the variant to cast)
+  async function fetchLegacyText(url) {
+    if (legacyCache.url === url && legacyCache.text) return legacyCache.text;
+    const r = await jsonp(`${HUDL}/api/viewer/app/rss?url=${encodeURIComponent(url)}`, 15000);
+    const text = r && r.success === true && typeof r.contents === 'string' ? r.contents : '';
+    if (!/^#EXTM3U/.test(text) || text.length > 200000) return null;
+    const uris = [];
+    text.split(/\r?\n/).forEach((l) => {
+      l = l.trim();
+      if (!l) return;
+      if (l[0] !== '#') uris.push(l);
+      else { const m = /URI="([^"]*)"/.exec(l); if (m) uris.push(m[1]); }
+    });
+    if (!uris.length || !uris.every((u) => /^https:\/\/[^\s"]+$/i.test(u))) return null;
+    legacyCache = { url, text };
+    return text;
+  }
+  async function legacyManifest(url) {
+    const text = await fetchLegacyText(url);
+    if (!text) return null;
+    if (manifestBlobUrl) { try { URL.revokeObjectURL(manifestBlobUrl); } catch (e) {} }
+    manifestBlobUrl = URL.createObjectURL(new Blob([text], { type: 'application/vnd.apple.mpegurl' }));
+    return manifestBlobUrl;
+  }
+
+  function showTitle(info) {
+    if (!info || !info.title) { gameTitleEl.style.display = 'none'; gameTitleEl.textContent = ''; return; }
+    gameTitleEl.textContent = info.title + (info.date ? ` — ${fmtDate(info.date)}` : '');
+    const sub = [info.siteName, info.status].filter(Boolean).join(' · ');
+    if (sub) { const sp = document.createElement('span'); sp.className = 'sub'; sp.textContent = sub; gameTitleEl.appendChild(sp); }
+    gameTitleEl.style.display = 'block';
+  }
+
+  function destroy() {
+    if (hls) { hls.destroy(); hls = null; }
+    video.removeAttribute('src'); video.load();
+    qualitySel.innerHTML = '<option value="-1">Auto</option>'; qualitySel.disabled = true;
+  }
+
+  function start(info, startAt) {
+    destroy();
+    current = info;
+    pendingStart = Math.max(0, Number(startAt) || 0);
+    loadBookmarks();
+    updateUrl(true);
+    showTitle(info);
+    const label = info.id ? `broadcast ${info.id}` : 'stream';
+    setStatus(`Loading ${label}${info.type && info.type !== 'direct' ? ` (${info.type})` : ''}...`);
+
+    if (window.Hls && Hls.isSupported()) {
+      hls = new Hls({
+        autoStartLoad: false,
+        startPosition: pendingStart,
+        maxBufferLength: 30,
+        backBufferLength: 60,
+        enableWorker: true,
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        restrictToAvc();
+        buildQualityMenu();
+        hls.startLoad(pendingStart || -1);
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, d) => updateQualityLabel(d.level));
+      let mediaRecoveries = 0, netRetries = 0;
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (!d.fatal) return;
+        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries++ < 5) {
+          setStatus('Network error, retrying...', 'warn'); setTimeout(() => hls && hls.startLoad(), 1000 * netRetries);
+        } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++ < 3) {
+          setStatus('Media error, recovering...', 'warn'); hls.recoverMediaError();
+        } else {
+          setStatus(`Playback error: ${d.details}`, 'err');
+          showNotice(`<strong>The stream couldn't be played</strong> (${escapeHtml(d.details)}).` +
+            (info.geoblocked ? ' This broadcast is geo-restricted.' : ' It may be unavailable, expired, or restricted.'), true);
+        }
+      });
+      hls.loadSource(info.playUrl || info.url);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = info.url; // Safari native HLS
+    } else {
+      setStatus('This browser cannot play HLS (no MediaSource and no native HLS).', 'err');
+    }
+    if (CAST.connected) castLoad(info, pendingStart); // a game loaded while casting plays on the TV
+  }
+
+  // Keep only H.264 (avc1) variants so non-HEVC browsers play reliably.
+  function restrictToAvc() {
+    const lv = hls.levels || [];
+    const isAvc = (l) => /^avc1/i.test(l.videoCodec || '') || (!l.videoCodec && /avc1/i.test(l.attrs && l.attrs.CODECS || ''));
+    if (!lv.some(isAvc)) return; // nothing to filter (e.g. codecs not declared)
+    for (let i = lv.length - 1; i >= 0; i--) {
+      if (!isAvc(lv[i])) { try { hls.removeLevel(i); } catch (e) {} }
+    }
+  }
+  function levelName(l) { return l.height ? `${l.height}p` : (l.bitrate ? `${Math.round(l.bitrate / 1000)} kbps` : 'Level'); }
+  function buildQualityMenu() {
+    const lv = hls.levels || [];
+    qualitySel.innerHTML = '<option value="-1">Auto</option>' +
+      lv.map((l, i) => ({ l, i })).sort((a, b) => (b.l.height || 0) - (a.l.height || 0) || b.l.bitrate - a.l.bitrate)
+        .map(({ l, i }) => `<option value="${i}">${levelName(l)}</option>`).join('');
+    qualitySel.disabled = lv.length < 2;
+    qualitySel.value = '-1';
+  }
+  function updateQualityLabel(idx) {
+    const autoOpt = qualitySel.querySelector('option[value="-1"]');
+    if (!autoOpt || !hls) return;
+    const l = hls.levels[idx];
+    autoOpt.textContent = hls.autoLevelEnabled && l ? `Auto (${levelName(l)})` : 'Auto';
+  }
+  qualitySel.addEventListener('change', () => {
+    if (!hls) return;
+    hls.currentLevel = Number(qualitySel.value);
+    qualitySel.blur();
+  });
+
+  video.addEventListener('loadedmetadata', () => {
+    // Native HLS (Safari) path: apply start time here; hls.js handles startPosition itself.
+    if (!hls && pendingStart) seekTo(pendingStart);
+    const [a, b] = range();
+    const live = current && current.type === 'live';
+    setStatus(`${current && current.id ? 'Broadcast ' + current.id : 'Stream'}${live ? ' (LIVE, DVR)' : ''} - ${fmt(b - a)} loaded`);
+  });
+  // Once frames at the requested start are ready, stop pinning t to the requested start.
+  video.addEventListener('canplay', () => {
+    if (pendingStart && Math.abs(video.currentTime - pendingStart) < 15) pendingStart = 0;
+    if (playWhenReady && !CAST.connected) { playWhenReady = false; video.play().catch(() => {}); }
+  });
+  video.addEventListener('waiting', () => { if (current && !CAST.connected) osd.textContent = osdText() + ' - buffering'; });
+  // While casting the TV is the player: keep the local video paused.
+  video.addEventListener('play', () => { if (CAST.connected) { video.pause(); flash('Playing on the TV'); } });
+
+  // ---------- transport (routes to the TV while casting) ----------
+  function remoteReady() {
+    const p = CAST.player;
+    return !!(CAST.connected && p && p.isMediaLoaded && current && CAST.loadedKey === current.key);
+  }
+  function remoteTime() {
+    if (remoteReady()) return CAST.player.currentTime || 0;
+    if (current && CAST.timeKey === current.key) return CAST.lastTime;
+    return pendingStart || 0;
+  }
+  function nowTime() { return CAST.connected ? remoteTime() : (video.currentTime || 0); }
+  function curRange() {
+    if (!CAST.connected) return range();
+    if (!remoteReady()) return [0, 0];
+    const p = CAST.player, lr = p.liveSeekableRange;
+    if (lr && isFinite(lr.end) && lr.end > (lr.start || 0)) return [lr.start || 0, lr.end];
+    return [0, p.duration > 0 ? p.duration : 0];
+  }
+  function notReadyOnTv() { flash(current ? 'Still loading on the TV' : 'Load a game first'); return false; }
+  // Seek to an absolute time; returns false if nothing happened.
+  function seekAbs(t) {
+    if (!CAST.connected) { seekTo(t); return true; }
+    if (!remoteReady()) return notReadyOnTv();
+    const [a, b] = curRange();
+    t = b > a ? Math.min(Math.max(t, a), Math.max(a, b - 1)) : Math.max(0, t);
+    CAST.player.currentTime = t;
+    CAST.ctl.seek();
+    CAST.lastTime = t; CAST.timeKey = current.key;
+    renderCastTime(); updateUrl(true);
+    return true;
+  }
+  function seekBy(d) { return seekAbs(nowTime() + d); }
+  function togglePlay() {
+    if (!CAST.connected) { if (video.paused) video.play().catch(() => {}); else video.pause(); return; }
+    if (remoteReady()) CAST.ctl.playOrPause(); else notReadyOnTv();
+  }
+
+  // ---------- speed / OSD ----------
+  speedSel.innerHTML = SPEEDS.map((s) => `<option value="${s}">${s}x</option>`).join('');
+  speedSel.value = '1';
+  speedSel.addEventListener('change', () => { applyRate(Number(speedSel.value)); speedSel.blur(); });
+  function osdText() {
+    if (CAST.connected) return `TV ${CAST.rate.toFixed(2)}x  ${fmt(remoteTime())}`;
+    return `${video.playbackRate.toFixed(2)}x  ${fmt(video.currentTime)}`;
+  }
+  video.addEventListener('ratechange', () => {
+    if (CAST.connected) return;
+    const r = video.playbackRate;
+    if (SPEEDS.includes(r)) speedSel.value = String(r);
+    osd.textContent = osdText();
+  });
+  function curRate() { return CAST.connected ? CAST.rate : video.playbackRate; }
+  function syncSpeedSel(r) { if (SPEEDS.includes(r)) speedSel.value = String(r); }
+  function applyRate(r) {
+    if (!CAST.connected) { video.playbackRate = r; return; }
+    // The Default Media Receiver may ignore SET_PLAYBACK_RATE; check the TV's reported rate afterwards.
+    const s = castSession(), m = s && remoteReady() ? s.getMediaSession() : null;
+    if (!m) { notReadyOnTv(); syncSpeedSel(CAST.rate); return; }
+    try {
+      const p = s.sendMessage('urn:x-cast:com.google.cast.media',
+        { type: 'SET_PLAYBACK_RATE', requestId: Math.floor(Math.random() * 1e9), mediaSessionId: m.mediaSessionId, playbackRate: r });
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+    flash(`${r}x on the TV`);
+    syncSpeedSel(r);
+    clearTimeout(CAST.rateTimer);
+    CAST.rateTimer = setTimeout(() => {
+      const mm = CAST.connected && remoteReady() ? castSession().getMediaSession() : null;
+      const now = mm && typeof mm.playbackRate === 'number' ? mm.playbackRate : CAST.rate;
+      CAST.rate = now; syncSpeedSel(now); renderCastTime();
+      if (mm && Math.abs(now - r) > 1e-3) flash('The TV does not support speed changes');
+    }, 2500);
+  }
+  function setSpeed(dir) {
+    const r = curRate();
+    let i = SPEEDS.findIndex((s) => s >= r - 1e-6);
+    if (i < 0) i = SPEEDS.length - 1;
+    if (dir > 0) i = SPEEDS[i] > r + 1e-6 ? i : i + 1;
+    else i = i - 1;
+    i = Math.max(0, Math.min(SPEEDS.length - 1, i));
+    applyRate(SPEEDS[i]);
+    if (!CAST.connected) flash(`${SPEEDS[i]}x`);
+  }
+
+  // ---------- deep link (?src=&t=, ?site=) ----------
+  // When hosted inside an iframe (e.g. as a claude.ai Artifact) our own URL is not the one the
+  // user sees or can share, so links degrade to plain "ID @ time" text that the input box accepts.
+  const FRAMED = (() => { try { return window.top !== window.self; } catch (e) { return true; } })();
+  const CAN_LINK = !FRAMED && /^(https?|file):$/.test(location.protocol);
+  let lastUrlUpdate = 0;
+  function updateUrl(force) {
+    if (!current || !CAN_LINK) return;
+    const now = Date.now();
+    if (!force && now - lastUrlUpdate < 2000) return;
+    lastUrlUpdate = now;
+    try {
+      const params = new URLSearchParams(location.search);
+      params.set('src', current.id || current.url || current.input || '');
+      params.delete('site');
+      // Until playback has actually positioned itself, keep the requested start time.
+      // While casting, t follows the TV.
+      const t = Math.floor(CAST.connected ? remoteTime() : (pendingStart || video.currentTime || 0));
+      if (t > 0) params.set('t', String(t)); else params.delete('t');
+      history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+    } catch (e) {}
+  }
+  function shareRef() { return (current && (current.id || current.input || current.url)) || ''; }
+  function shareText(t) { return `${shareRef()} @ ${fmt(t)}`; }
+  function shareLink(t) {
+    if (!CAN_LINK) return null;
+    try {
+      const params = new URLSearchParams();
+      params.set('src', (current && (current.id || current.url || current.input)) || '');
+      params.set('t', String(Math.floor(t)));
+      const base = location.protocol === 'file:' ? location.href.split(/[?#]/)[0] : `${location.origin}${location.pathname}`;
+      return `${base}?${params.toString()}`;
+    } catch (e) { return null; }
+  }
+  function shareAny(t) { return shareLink(t) || shareText(t); }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+    try { // fallback for frames without clipboard permission
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch (e) { return false; }
+  }
+  video.addEventListener('timeupdate', () => { if (CAST.connected) return; osd.textContent = osdText(); updateUrl(false); });
+  video.addEventListener('seeked', () => { if (!CAST.connected) updateUrl(true); });
+  video.addEventListener('pause', () => updateUrl(true));
+  $('copyLink').addEventListener('click', async () => {
+    if (!current) { flash('Load a game first'); return; }
+    const t = nowTime();
+    const link = shareLink(t);
+    const text = link || shareText(t);
+    if (await copyText(text)) flash(link ? 'Link copied' : 'Copied ' + text);
+    else {
+      // Clipboard (and possibly prompt) blocked, e.g. in a sandboxed frame: show it so it can be copied by hand.
+      setStatus('Copy this: ' + text); flash('Copy from the status bar');
+      try { window.prompt('Copy this:', text); } catch (e) {}
+    }
+  });
+
+  // ---------- bookmarks ----------
+  function bmKey() { return current ? 'hudl-film-viewer:bookmarks:' + current.key : null; }
+  function loadBookmarks() { const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; renderBookmarks(); }
+  function saveBookmarks() { const k = bmKey(); if (k) store(k, bookmarks.length ? bookmarks : null); }
+  function renderBookmarks(focusIdx) {
+    const list = $('bmList');
+    bookmarks.sort((a, b) => a.t - b.t);
+    list.innerHTML = bookmarks.map((b, i) =>
+      `<li data-i="${i}"><button class="t" data-act="seek" title="Seek">${fmt(b.t)}</button>
+         <input data-act="note" value="${escapeHtml(b.note || '')}" placeholder="note..." maxlength="300">
+         <button class="del" data-act="del" title="Delete">&times;</button></li>`).join('');
+    $('bmEmpty').style.display = bookmarks.length ? 'none' : '';
+    if (focusIdx != null) { const inp = list.querySelector(`li[data-i="${focusIdx}"] input`); if (inp) inp.focus(); }
+  }
+  function addBookmark() {
+    if (!current) { flash('Load a game first'); return; }
+    const b = { t: Math.round(nowTime() * 10) / 10, note: '', at: Date.now() }; // the TV's time while casting
+    bookmarks.push(b);
+    saveBookmarks();
+    renderBookmarks();
+    renderBookmarks(bookmarks.indexOf(b));
+    flash(`Marked ${fmt(b.t)}`);
+  }
+  $('addBm').addEventListener('click', addBookmark);
+  $('bmList').addEventListener('click', (e) => {
+    const li = e.target.closest('li'); if (!li) return;
+    const i = Number(li.dataset.i), act = e.target.dataset.act;
+    if (act === 'seek') { seekAbs(bookmarks[i].t); video.focus(); }
+    else if (act === 'del') { bookmarks.splice(i, 1); saveBookmarks(); renderBookmarks(); }
+  });
+  $('bmList').addEventListener('input', (e) => {
+    if (e.target.dataset.act !== 'note') return;
+    const i = Number(e.target.closest('li').dataset.i);
+    bookmarks[i].note = e.target.value; saveBookmarks();
+  });
+  $('bmList').addEventListener('keydown', (e) => {
+    if (e.target.dataset.act === 'note' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); video.focus(); }
+  });
+  $('exportBm').addEventListener('click', () => {
+    if (!current || !bookmarks.length) { flash('No bookmarks'); return; }
+    const name = current.title ? `${current.title}${current.date ? ' - ' + fmtDate(current.date) : ''}` : '';
+    const head = `Bookmarks - ${current.id ? 'broadcast ' + current.id : current.url}${name ? '\n' + name : ''}\nSource: ${current.input || ''}\n\n`;
+    const body = bookmarks.map((b) => `${fmt(b.t).padStart(8)}  ${b.note || ''}\n          ${shareAny(b.t)}`).join('\n');
+    const text = head + body + '\n';
+    copyText(text);
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      a.download = `bookmarks-${current.id || 'stream'}.txt`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {}
+    flash('Exported (also copied)');
+  });
+
+  // ---------- browse a school's games ----------
+  let browseState = null; // { slug, page, seq, ...search state }
+  // Server-side filters supported by api/viewer/broadcast (same params BlueFrame's own widget sends):
+  // title (case-insensitive, all words must appear), section_id, after / before (ISO instants).
+  function browseUrl(slug, viewerStatus, dir, page, f, perPage) {
+    let u = `${HUDL}/api/viewer/broadcast?sites=${encodeURIComponent(slug)}&viewer_status=${viewerStatus}` +
+      `&sort_by=date&sort_dir=${dir}&per_page=${perPage || 30}&page=${page}`;
+    if (f) {
+      if (f.q) u += `&title=${encodeURIComponent(f.q)}`;
+      if (f.section) u += `&section_id=${encodeURIComponent(f.section)}`;
+      if (f.from) u += `&after=${encodeURIComponent(dayBound(f.from, false))}`;
+      if (f.to) u += `&before=${encodeURIComponent(dayBound(f.to, true))}`;
+    }
+    return u;
+  }
+  // "2025-01-31" (a local calendar day) -> ISO instant at the start or end of that day.
+  function dayBound(ymd, end) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    if (!m) return '';
+    const d = end ? new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59, 999) : new Date(+m[1], +m[2] - 1, +m[3]);
+    return isNaN(d) ? '' : d.toISOString();
+  }
+  function gameItem(b, slug) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.dataset.id = String(b.id);
+    const img = b.small_image || b.medium_image;
+    if (img && /^https:\/\//i.test(img)) {
+      const im = document.createElement('img');
+      im.loading = 'lazy'; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = img;
+      im.onerror = () => { im.style.visibility = 'hidden'; };
+      btn.appendChild(im);
+    }
+    const t = document.createElement('div'); t.className = 'gt';
+    const n = document.createElement('div'); n.className = 'gname'; n.textContent = b.title || `Broadcast ${b.id}`;
+    const sub = document.createElement('div'); sub.className = 'gsub';
+    const st = String(b.status || '');
+    const badge = document.createElement('span');
+    badge.className = 'badge' + (/stream|live/i.test(st) ? ' live' : '');
+    badge.textContent = /stream/i.test(st) ? 'LIVE' : (st || '?');
+    sub.appendChild(badge);
+    const bits = [fmtDateTime(b.date), b.section_title, b.site && b.site !== slug ? b.site_title : ''].filter(Boolean).map((x) => String(x).trim());
+    sub.appendChild(document.createTextNode(' ' + bits.join(' · ')));
+    t.appendChild(n); t.appendChild(sub); btn.appendChild(t); li.appendChild(btn);
+    return li;
+  }
+  async function openBrowse(slugRaw) {
+    const slug = String(slugRaw || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').replace(/[/?#].*$/, '');
+    if (!/^[a-z0-9_-]{2,64}$/.test(slug)) { browseEl.className = 'open'; browseEl.innerHTML = '<div class="empty">Enter a school\'s site name, e.g. <code>mountmarty</code> (the part after gpacnetwork.com/).</div>'; return; }
+    siteInput.value = slug;
+    store(LS_SITE, slug);
+    const seq = (browseState ? browseState.seq : 0) + 1;
+    browseState = { slug, page: 1, seq };
+    browseEl.className = 'open';
+    browseEl.innerHTML = `<div class="bhead"><strong></strong><button class="link" data-act="close">Close</button></div><div class="empty">Loading games...</div>`;
+    browseEl.querySelector('strong').textContent = slug;
+    const [live, past] = await Promise.allSettled([
+      jsonp(browseUrl(slug, 3, 'asc', 1), 15000),
+      jsonp(browseUrl(slug, 4, 'desc', 1), 15000),
+    ]);
+    if (!browseState || browseState.seq !== seq) return;
+    const liveList = live.status === 'fulfilled' && live.value && Array.isArray(live.value.broadcasts) ? live.value.broadcasts : [];
+    const pastList = past.status === 'fulfilled' && past.value && Array.isArray(past.value.broadcasts) ? past.value.broadcasts : [];
+    browseEl.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'bhead';
+    const h = document.createElement('strong');
+    const siteTitle = (pastList.find((b) => b.site === slug) || liveList.find((b) => b.site === slug) || {}).site_title;
+    h.textContent = siteTitle ? `${String(siteTitle).trim()} (${slug})` : slug;
+    const close = document.createElement('button'); close.className = 'link'; close.dataset.act = 'close'; close.textContent = 'Close';
+    head.appendChild(h); head.appendChild(close); browseEl.appendChild(head);
+    if (live.status === 'rejected' && past.status === 'rejected') {
+      const d = document.createElement('div'); d.className = 'empty';
+      d.textContent = `Couldn't load games: ${past.reason && past.reason.message || 'error'}`;
+      browseEl.appendChild(d); return;
+    }
+    if (!liveList.length && !pastList.length) {
+      const d = document.createElement('div'); d.className = 'empty';
+      d.textContent = `No games found for "${slug}". Check the site name (the part after gpacnetwork.com/ or in the school's Hudl/BlueFrame page).`;
+      browseEl.appendChild(d); return;
+    }
+    // Search bar (previous games only), then the normal list and a results area that replaces it while searching.
+    const st = browseState;
+    st.sections = new Map(); st.rKey = ''; st.rSeq = 0; st.timer = 0;
+    st.bar = buildSearchBar(); browseEl.appendChild(st.bar);
+    st.normal = document.createElement('div'); browseEl.appendChild(st.normal);
+    st.results = document.createElement('div'); st.results.hidden = true; browseEl.appendChild(st.results);
+    if (liveList.length) {
+      const h3 = document.createElement('h3'); h3.textContent = 'Live & upcoming'; st.normal.appendChild(h3);
+      const ul = document.createElement('ul'); ul.className = 'games';
+      liveList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
+    }
+    const h3 = document.createElement('h3'); h3.textContent = 'Recent games'; st.normal.appendChild(h3);
+    const ul = document.createElement('ul'); ul.className = 'games'; ul.id = 'pastGames';
+    pastList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
+    if (!pastList.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No archived games.'; st.normal.appendChild(d); }
+    const pages = past.status === 'fulfilled' ? Number(past.value.num_pages) || 1 : 1;
+    if (pastList.length >= 30 && pages > 1) st.normal.appendChild(moreButton('past'));
+    // Sport list: Hudl's sections endpoint isn't per school, so collect the sections this school actually uses
+    // from what we've loaded plus one background page of its 100 most recent archived games.
+    addSections(st, liveList.concat(pastList));
+    jsonp(browseUrl(slug, 4, 'desc', 1, null, 100), 15000)
+      .then((r) => { if (browseState === st && r && Array.isArray(r.broadcasts)) addSections(st, r.broadcasts); })
+      .catch(() => {});
+  }
+  function moreButton(list) {
+    const more = document.createElement('button');
+    more.type = 'button'; more.dataset.act = 'more'; more.dataset.list = list; more.textContent = 'Load more'; more.style.marginTop = '8px';
+    return more;
+  }
+  function buildSearchBar() {
+    const bar = document.createElement('div'); bar.className = 'bsearch';
+    // Static markup only; every API-derived value is added later with textContent / option.text.
+    bar.innerHTML =
+      '<input type="search" data-f="q" placeholder="Search previous games: opponent or title word" aria-label="Search previous games" maxlength="100" spellcheck="false" autocomplete="off">' +
+      '<select data-f="section" aria-label="Sport"><option value="">All sports</option></select>' +
+      '<label>From <input type="date" data-f="from" aria-label="From date"></label>' +
+      '<label>To <input type="date" data-f="to" aria-label="To date"></label>' +
+      '<button type="button" class="link" data-act="clear" hidden>Clear</button>';
+    return bar;
+  }
+  function addSections(st, list) {
+    let changed = false;
+    list.forEach((b) => {
+      const id = String(b.section_id || ''), title = String(b.section_title || '').trim();
+      if (/^\d+$/.test(id) && title && !st.sections.has(id)) { st.sections.set(id, title); changed = true; }
+    });
+    if (!changed) return;
+    const sel = st.bar.querySelector('[data-f="section"]'), keep = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    [...st.sections].sort((a, b) => a[1].localeCompare(b[1])).forEach(([id, title]) => {
+      const o = document.createElement('option'); o.value = id; o.text = title; sel.appendChild(o);
+    });
+    sel.value = keep;
+  }
+  function readFilters(st) {
+    const v = (k) => String(st.bar.querySelector(`[data-f="${k}"]`).value || '');
+    const day = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s) && dayBound(s, false) ? s : '');
+    const section = v('section');
+    return { q: v('q').trim().replace(/\s+/g, ' ').slice(0, 100), section: /^\d+$/.test(section) ? section : '', from: day(v('from')), to: day(v('to')) };
+  }
+  function describeFilters(st, f) {
+    const bits = [];
+    if (f.q) bits.push(`"${f.q}"`);
+    if (f.section) bits.push(st.sections.get(f.section) || 'selected sport');
+    if (f.from) bits.push(`from ${f.from}`);
+    if (f.to) bits.push(`to ${f.to}`);
+    return bits.join(', ');
+  }
+  function scheduleSearch(delay) {
+    const st = browseState; if (!st || !st.bar) return;
+    clearTimeout(st.timer);
+    st.timer = setTimeout(() => runSearch(st), delay);
+  }
+  async function runSearch(st, force) {
+    if (!st || browseState !== st || !st.bar) return;
+    clearTimeout(st.timer);
+    const f = readFilters(st), key = JSON.stringify(f);
+    if (key === st.rKey && !force) return;
+    st.rKey = key;
+    const seq = ++st.rSeq;
+    const active = !!(f.q || f.section || f.from || f.to);
+    st.bar.querySelector('[data-act="clear"]').hidden = !active;
+    st.results.innerHTML = '';
+    if (!active) { st.results.hidden = true; st.normal.hidden = false; return; }
+    st.normal.hidden = true; st.results.hidden = false;
+    const stat = document.createElement('div'); stat.className = 'bstat'; stat.setAttribute('role', 'status');
+    stat.textContent = 'Searching all previous games...';
+    st.results.appendChild(stat);
+    let r;
+    try {
+      r = await jsonp(browseUrl(st.slug, 4, 'desc', 1, f), 15000);
+      if (r && r.success === false) throw new Error((r.error && r.error.message) || 'Hudl returned an error.');
+    } catch (e) {
+      if (browseState !== st || st.rSeq !== seq) return;
+      st.rKey = ''; // let Enter retry the same query
+      stat.className = 'bstat err'; stat.textContent = `Search failed: ${e.message || e}. Press Enter to retry.`;
+      return;
+    }
+    if (browseState !== st || st.rSeq !== seq) return;
+    const list = Array.isArray(r && r.broadcasts) ? r.broadcasts : [];
+    addSections(st, list);
+    st.rFilters = f; st.rPage = 1;
+    const what = describeFilters(st, f);
+    stat.textContent = '';
+    if (!list.length) {
+      const s = document.createElement('strong'); s.textContent = 'No matches';
+      stat.appendChild(s); stat.appendChild(document.createTextNode(` for ${what} in previous games for ${st.slug}.`));
+      return;
+    }
+    const total = Number(r.item_count) || list.length;
+    const s = document.createElement('strong'); s.textContent = `${total} ${total === 1 ? 'match' : 'matches'}`;
+    stat.appendChild(s); stat.appendChild(document.createTextNode(` for ${what}`));
+    const ul = document.createElement('ul'); ul.className = 'games'; ul.id = 'searchGames';
+    list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
+    st.results.appendChild(ul);
+    if (list.length >= 30 && (Number(r.num_pages) || 1) > 1) st.results.appendChild(moreButton('results'));
+  }
+  async function loadMore(btn) {
+    if (!browseState) return;
+    const st = browseState, isResults = btn.dataset.list === 'results', seq = st.rSeq;
+    const page = (isResults ? st.rPage : st.page) + 1;
+    btn.disabled = true; btn.textContent = 'Loading...';
+    try {
+      const r = await jsonp(browseUrl(st.slug, 4, 'desc', page, isResults ? st.rFilters : null), 15000);
+      if (browseState !== st || (isResults && st.rSeq !== seq)) return;
+      const list = r && Array.isArray(r.broadcasts) ? r.broadcasts : [];
+      const ul = $(isResults ? 'searchGames' : 'pastGames');
+      list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
+      addSections(st, list);
+      if (isResults) st.rPage = page; else st.page = page;
+      if (list.length < 30 || page >= (Number(r.num_pages) || 1)) btn.remove();
+      else { btn.disabled = false; btn.textContent = 'Load more'; }
+    } catch (e) { btn.disabled = false; btn.textContent = 'Load more (retry)'; }
+  }
+  function clearSearch(st) {
+    st.bar.querySelectorAll('[data-f]').forEach((el) => { el.value = ''; });
+    runSearch(st);
+  }
+  browseEl.addEventListener('input', (e) => {
+    const f = e.target.dataset && e.target.dataset.f;
+    if (f === 'q') scheduleSearch(400);
+  });
+  browseEl.addEventListener('change', (e) => {
+    const f = e.target.dataset && e.target.dataset.f;
+    if (f === 'section') runSearch(browseState);
+    else if (f === 'from' || f === 'to') scheduleSearch(400);
+  });
+  browseEl.addEventListener('keydown', (e) => {
+    if (!e.target.dataset || !e.target.dataset.f || !browseState) return;
+    if (e.key === 'Enter') { e.preventDefault(); runSearch(browseState, true); }
+    else if (e.key === 'Escape' && e.target.dataset.f === 'q' && e.target.value) { e.preventDefault(); e.stopPropagation(); e.target.value = ''; runSearch(browseState); }
+  });
+  browseEl.addEventListener('click', (e) => {
+    const el = e.target.closest('button'); if (!el) return;
+    if (el.dataset.act === 'close') { browseEl.className = ''; return; }
+    if (el.dataset.act === 'more') { loadMore(el); return; }
+    if (el.dataset.act === 'clear') { if (browseState && browseState.bar) clearSearch(browseState); return; }
+    if (el.dataset.id) {
+      srcInput.value = el.dataset.id;
+      browseEl.className = '';
+      loadFromInput(el.dataset.id, 0);
+      try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
+    }
+  });
+
+  // ---------- keyboard ----------
+  function isTyping(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+  window.addEventListener('keydown', (e) => {
+    if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    let handled = true;
+    switch (true) {
+      case k === ' ': togglePlay(); break;
+      case k === 'ArrowLeft': if (seekBy(-(e.shiftKey ? 30 : 5))) flash(e.shiftKey ? '-30s' : '-5s'); break;
+      case k === 'ArrowRight': if (seekBy(e.shiftKey ? 30 : 5)) flash(e.shiftKey ? '+30s' : '+5s'); break;
+      case k === 'j' || k === 'J': if (seekBy(-10)) flash('-10s'); break;
+      case k === 'k' || k === 'K': if (seekBy(10)) flash('+10s'); break;
+      case k === ',' || k === '<' || k === '.' || k === '>':
+        if (CAST.connected) { flash('Frame step is off while casting'); break; }
+        video.pause(); seekTo(video.currentTime + (k === ',' || k === '<' ? -FRAME : FRAME)); break;
+      case k === '[' || k === 'ArrowDown': setSpeed(-1); break;
+      case k === ']' || k === 'ArrowUp': setSpeed(1); break;
+      case k === '\\': applyRate(1); if (!CAST.connected) flash('1x'); break;
+      case /^[0-9]$/.test(k) && !e.shiftKey: {
+        const [a, b] = curRange();
+        if (b > a) { if (seekAbs(a + (b - a) * Number(k) / 10)) flash(`${k}0%`); }
+        else if (CAST.connected) notReadyOnTv();
+        break;
+      }
+      case k === 'm' || k === 'M': addBookmark(); break;
+      case k === 'f' || k === 'F':
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        else if ($('videoWrap').requestFullscreen) $('videoWrap').requestFullscreen().catch(() => {});
+        break;
+      default: handled = false;
+    }
+    if (handled) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  // ---------- cast: what to send the TV (pure; no DOM or Cast SDK use) ----------
+  /* CAST-PLAN-BEGIN */
+  const CastPlan = (() => {
+    const LEGACY = /^https:\/\/vcloud\.hudl\.com\/file\/broadcast\/\d+\.m3u8(\?|$)/i;
+    const MAX_BYTES = 65536; // playlists are read only this far (enough for the header and first segments)
+    function absUrl(u, base) { try { return new URL(u, base).href; } catch (e) { return null; } }
+    function attrs(s) {
+      const out = {}, re = /([A-Z0-9-]+)=("([^"]*)"|[^,]*)/g;
+      let m;
+      while ((m = re.exec(s))) out[m[1]] = m[3] != null ? m[3] : m[2];
+      return out;
+    }
+    // Variant streams of a master playlist, with absolute https URLs.
+    function variants(text, base) {
+      const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()), out = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (!/^#EXT-X-STREAM-INF:/i.test(lines[i])) continue;
+        const a = attrs(lines[i].slice(lines[i].indexOf(':') + 1));
+        let j = i + 1;
+        while (j < lines.length && (!lines[j] || lines[j][0] === '#')) j++;
+        const url = j < lines.length ? absUrl(lines[j], base) : null;
+        if (url && /^https:\/\//i.test(url)) out.push({ url, bandwidth: Number(a.BANDWIDTH) || 0, codecs: a.CODECS || '' });
+      }
+      return out;
+    }
+    // Highest-bandwidth H.264 (avc1) variant; HEVC-only declarations are skipped when an avc1 one exists.
+    function pickVariant(list) {
+      if (!list.length) return null;
+      const avc = list.filter((v) => /avc1/i.test(v.codecs));
+      const pool = avc.length ? avc : (list.some((v) => !v.codecs) ? list.filter((v) => !v.codecs) : list);
+      return pool.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a));
+    }
+    // 'fmp4' | 'ts' | null, from a media playlist.
+    function segmentFormat(text) {
+      const t = String(text || '');
+      if (!/#EXTINF/i.test(t)) return null;
+      if (/#EXT-X-MAP:/i.test(t)) return 'fmp4';
+      for (const raw of t.split(/\r?\n/)) {
+        const l = raw.trim();
+        if (!l || l[0] === '#') continue;
+        const path = l.split(/[?#]/)[0].toLowerCase();
+        if (/\.(m4s|mp4|m4v|cmfv)$/.test(path)) return 'fmp4';
+        if (/\.ts$/.test(path)) return 'ts';
+        return null;
+      }
+      return null;
+    }
+    // Used only when the playlists can't be read: Hudl's video.ondemand.m3u8 is fMP4, .live.m3u8 usually MPEG-TS.
+    function guessFormat(url) {
+      const p = String(url || '').split(/[?#]/)[0].toLowerCase();
+      return /\.ondemand\.m3u8$/.test(p) && !/\.live\./.test(p) ? 'fmp4' : 'ts';
+    }
+    // Values of the Cast HlsSegmentFormat / HlsVideoSegmentFormat enums.
+    function formatFields(fmt) {
+      return fmt === 'fmp4' ? { hlsSegmentFormat: 'fmp4', hlsVideoSegmentFormat: 'fmp4' }
+                            : { hlsSegmentFormat: 'ts', hlsVideoSegmentFormat: 'mpeg2_ts' };
+    }
+    // io.fetchText(url) -> Promise<{ text, complete } | null>   (CORS fetch, first MAX_BYTES)
+    // io.legacyText(url) -> Promise<string | null>             (legacy master via the JSONP proxy)
+    // -> { sources: [{ url, fmt }, ...] in the order to try, streamType: 'LIVE'|'BUFFERED', detected, legacy }
+    async function build(info, io) {
+      const url = info.url, legacy = LEGACY.test(url);
+      let master = null, media = null, variant = null;
+      try {
+        if (legacy) { const t = await io.legacyText(url); master = t ? { text: t, complete: true } : null; }
+        else master = await io.fetchText(url);
+      } catch (e) { master = null; }
+      const mText = (master && master.text) || '';
+      if (/#EXT-X-STREAM-INF/i.test(mText)) {
+        variant = pickVariant(variants(mText, url));
+        if (variant) { try { media = await io.fetchText(variant.url); } catch (e) { media = null; } }
+      } else if (/#EXTINF/i.test(mText)) media = master; // the URL is already a media playlist
+      const found = media && segmentFormat(media.text);
+      const fmt = found || guessFormat(url);
+      let live = info.type === 'live';
+      if (!live && info.type !== 'archive' && media && media.complete) {
+        live = !/#EXT-X-ENDLIST/i.test(media.text) && !/#EXT-X-PLAYLIST-TYPE:VOD/i.test(media.text);
+      }
+      const main = { url, fmt };
+      const alt = variant && variant.url !== url ? { url: variant.url, fmt } : null;
+      // Legacy masters have no CORS header, so the TV can only read their (CloudFront) variants.
+      const sources = legacy ? [alt || main] : (alt ? [main, alt] : [main]);
+      return { sources, streamType: live ? 'LIVE' : 'BUFFERED', detected: !!found, legacy };
+    }
+    return { LEGACY, MAX_BYTES, variants, pickVariant, segmentFormat, guessFormat, formatFields, build };
+  })();
+  /* CAST-PLAN-END */
+
+  // Read the start of a CORS-enabled text resource (Hudl's CDN and CloudFront send Access-Control-Allow-Origin: *).
+  async function fetchHead(url) {
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ac) ac.abort(); }, 10000);
+    try {
+      const r = await fetch(url, { credentials: 'omit', signal: ac ? ac.signal : undefined });
+      if (!r.ok) return null;
+      if (!r.body || !r.body.getReader) { const t = await r.text(); return { text: t.slice(0, CastPlan.MAX_BYTES), complete: t.length <= CastPlan.MAX_BYTES }; }
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let text = '', complete = false;
+      while (text.length < CastPlan.MAX_BYTES) {
+        const { done, value } = await reader.read();
+        if (done) { complete = true; break; }
+        text += dec.decode(value, { stream: true });
+      }
+      if (!complete) { try { reader.cancel(); } catch (e) {} }
+      return { text, complete };
+    } catch (e) { return null; } finally { clearTimeout(timer); }
+  }
+
+  // ---------- casting (Google Cast Web Sender, Default Media Receiver) ----------
+  const castBtn = $('castBtn'), castHelp = $('castHelp'), castOverlay = $('castOverlay');
+  const castDevEl = castOverlay.querySelector('.cdev'), castStateEl = castOverlay.querySelector('.cstate');
+  const IS_FILE = location.protocol === 'file:';
+  function castSession() { try { return CAST.ctx ? CAST.ctx.getCurrentSession() : null; } catch (e) { return null; } }
+  function deviceName() {
+    try { const s = castSession(), d = s && s.getCastDevice(); return (d && d.friendlyName) || ''; } catch (e) { return ''; }
+  }
+  function renderCastButton() {
+    let show = false;
+    try { show = !!CAST.ctx && (CAST.connected || CAST.ctx.getCastState() !== cast.framework.CastState.NO_DEVICES_AVAILABLE); } catch (e) {}
+    castBtn.hidden = !show;
+    // One muted, collapsed hint, only where Cast can't work (local file, or a browser without Google Cast).
+    castHelp.hidden = show || !(IS_FILE || CAST.unsupported);
+  }
+  castHelp.querySelector('span').textContent = IS_FILE
+    ? 'Casting needs this page served from a web address (e.g. GitHub Pages) — or use Chrome’s ⋮ > Cast to mirror this tab.'
+    : 'Casting needs Chrome or Edge.';
+  function castUnavailable(reason) {
+    CAST.unsupported = reason === 'browser';
+    renderCastButton();
+  }
+  function renderCast() {
+    const on = CAST.connected;
+    castOverlay.hidden = !on;
+    castBtn.classList.toggle('on', on);
+    castBtn.querySelector('span').textContent = on ? 'Stop casting' : 'Cast';
+    castBtn.title = on ? 'Stop casting and continue here' : 'Cast to a Chromecast / Google TV';
+    // The native controls would drive the (paused) local video, so hide them while casting.
+    if (on) video.removeAttribute('controls'); else video.setAttribute('controls', '');
+    if (on) { if (!CAST.device) CAST.device = deviceName(); castDevEl.textContent = `Casting to ${CAST.device || 'TV'}`; }
+    renderCastTime();
+  }
+  function renderCastTime() {
+    if (!CAST.connected) return;
+    let st;
+    if (!current) st = 'Load a game to play it on the TV';
+    else if (CAST.error) st = CAST.error;
+    else if (!remoteReady()) st = 'Loading on the TV...';
+    else {
+      const p = CAST.player, [a, b] = curRange();
+      const word = p.playerState === 'BUFFERING' ? 'Buffering' : (p.isPaused ? 'Paused' : 'Playing');
+      const live = CAST.plan && CAST.plan.streamType === 'LIVE';
+      st = `${word} · ${fmt(remoteTime())}${!live && b > a ? ' / ' + fmt(b) : ''}${live ? ' (LIVE)' : ''}`;
+    }
+    castStateEl.textContent = st;
+    osd.textContent = osdText();
+  }
+
+  function loadRequest(info, plan, src, t) {
+    const mi = new chrome.cast.media.MediaInfo(src.url, 'application/x-mpegurl');
+    mi.contentUrl = src.url;
+    mi.streamType = plan.streamType === 'LIVE' ? chrome.cast.media.StreamType.LIVE : chrome.cast.media.StreamType.BUFFERED;
+    const f = CastPlan.formatFields(src.fmt);
+    mi.hlsSegmentFormat = f.hlsSegmentFormat;
+    mi.hlsVideoSegmentFormat = f.hlsVideoSegmentFormat;
+    const md = new chrome.cast.media.GenericMediaMetadata();
+    md.title = info.title || (info.id ? `Broadcast ${info.id}` : 'Game film');
+    const sub = [info.siteName, info.date ? fmtDate(info.date) : ''].filter(Boolean).join(' · ');
+    if (sub) md.subtitle = sub;
+    mi.metadata = md;
+    const req = new chrome.cast.media.LoadRequest(mi);
+    req.autoplay = true;
+    if (t != null) req.currentTime = Math.max(0, t);
+    return req;
+  }
+
+  // Load `info` on the TV at time t (or keep it if the TV is already playing this stream, e.g. a re-joined session).
+  async function castLoad(info, t) {
+    const s = castSession();
+    if (!CAST.connected || !s || !info || !info.url) return;
+    const seq = ++CAST.loadSeq;
+    t = Math.max(0, Number(t) || 0);
+    CAST.loadedKey = null; CAST.error = ''; CAST.plan = null; CAST.timeKey = info.key; CAST.lastTime = t;
+    video.pause();
+    renderCast();
+    let plan;
+    try { plan = await CastPlan.build(info, { fetchText: fetchHead, legacyText: fetchLegacyText }); }
+    catch (e) { plan = { sources: [{ url: info.url, fmt: CastPlan.guessFormat(info.url) }], streamType: info.type === 'live' ? 'LIVE' : 'BUFFERED' }; }
+    if (seq !== CAST.loadSeq || castSession() !== s) return;
+    CAST.plan = plan;
+    const m = s.getMediaSession();
+    if (m && m.media && plan.sources.some((x) => x.url === m.media.contentId)) {
+      CAST.loadedKey = info.key;
+      const est = m.getEstimatedTime ? m.getEstimatedTime() : 0;
+      if (t && Math.abs(est - t) > 5) {
+        const sr = new chrome.cast.media.SeekRequest(); sr.currentTime = t;
+        m.seek(sr, () => {}, () => {});
+      } else CAST.lastTime = est;
+      watchMedia(s, m, seq, info, []);
+      renderCast();
+      return;
+    }
+    castTry(s, seq, info, plan.sources.slice(), t);
+  }
+  function castTry(s, seq, info, list, t) {
+    const src = list.shift();
+    if (!src) {
+      CAST.error = "The TV couldn't play this game.";
+      setStatus("The TV couldn't play this game. Stop casting to watch it here.", 'err');
+      renderCast();
+      return;
+    }
+    let at = t;
+    if (CAST.plan.streamType === 'LIVE') { const [a, b] = range(); if (!(b > a && b - t > 30)) at = null; } // null = live edge
+    s.loadMedia(loadRequest(info, CAST.plan, src, at)).then(() => {
+      if (seq !== CAST.loadSeq) return;
+      CAST.loadedKey = info.key; CAST.error = '';
+      watchMedia(s, s.getMediaSession(), seq, info, list);
+      renderCast();
+    }, () => {
+      if (seq !== CAST.loadSeq || castSession() !== s) return;
+      castTry(s, seq, info, list, t); // e.g. the master failed: try the direct H.264 variant
+    });
+  }
+  function watchMedia(s, m, seq, info, rest) {
+    if (!m) return;
+    CAST.rate = typeof m.playbackRate === 'number' ? m.playbackRate : 1;
+    syncSpeedSel(CAST.rate);
+    let failedOver = false;
+    m.addUpdateListener(() => {
+      if (seq !== CAST.loadSeq) return;
+      if (typeof m.playbackRate === 'number' && m.playbackRate !== CAST.rate) { CAST.rate = m.playbackRate; syncSpeedSel(CAST.rate); }
+      if (!failedOver && m.playerState === 'IDLE' && m.idleReason === 'ERROR') {
+        failedOver = true;
+        CAST.loadedKey = null;
+        castTry(s, seq, info, rest, CAST.lastTime);
+      }
+      renderCastTime();
+    });
+  }
+
+  function onConnectedChanged() {
+    const p = CAST.player;
+    if (p.isConnected && !CAST.connected) {
+      CAST.connected = true; CAST.device = deviceName(); CAST.error = ''; CAST.rate = 1;
+      const t = pendingStart || video.currentTime || 0;
+      playWhenReady = false;
+      video.pause();
+      speedSel.value = '1';
+      renderCast(); renderCastButton();
+      if (current && current.url) castLoad(current, t);
+    } else if (!p.isConnected && CAST.connected) {
+      const mine = !!(current && CAST.timeKey === current.key), wasLoaded = !!(current && CAST.loadedKey === current.key);
+      let t = CAST.lastTime, paused = CAST.lastPaused;
+      const saved = p.savedPlayerState;
+      if (wasLoaded && saved && saved.mediaInfo && CAST.plan && CAST.plan.sources.some((x) => x.url === saved.mediaInfo.contentId)) {
+        if (isFinite(saved.currentTime) && saved.currentTime > 0) t = saved.currentTime;
+        if (typeof saved.isPaused === 'boolean') paused = saved.isPaused;
+      }
+      CAST.connected = false; CAST.loadSeq++; CAST.loadedKey = null; CAST.plan = null; CAST.error = ''; CAST.device = '';
+      clearTimeout(CAST.rateTimer);
+      syncSpeedSel(video.playbackRate);
+      renderCast(); renderCastButton();
+      osd.textContent = osdText();
+      if (mine && current.url) resumeLocal(t, wasLoaded && !paused);
+      flash('Stopped casting');
+    }
+  }
+  function resumeLocal(t, play) {
+    if (video.readyState >= 1) { seekTo(t); if (play) video.play().catch(() => {}); }
+    else { pendingStart = t; playWhenReady = !!play; if (hls) { hls.stopLoad(); hls.startLoad(t); } }
+    updateUrl(true);
+  }
+  function onRemoteTime() {
+    const p = CAST.player;
+    if (!remoteReady() || p.playerState === 'IDLE') return;
+    CAST.lastTime = p.currentTime || 0; CAST.timeKey = current.key; CAST.lastPaused = !!p.isPaused;
+    renderCastTime();
+    updateUrl(false);
+  }
+  function initCast() {
+    try {
+      const ctx = cast.framework.CastContext.getInstance();
+      ctx.setOptions({
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+      });
+      CAST.ctx = ctx;
+      CAST.player = new cast.framework.RemotePlayer();
+      CAST.ctl = new cast.framework.RemotePlayerController(CAST.player);
+      const E = cast.framework.RemotePlayerEventType;
+      CAST.ctl.addEventListener(E.IS_CONNECTED_CHANGED, onConnectedChanged);
+      CAST.ctl.addEventListener(E.CURRENT_TIME_CHANGED, onRemoteTime);
+      CAST.ctl.addEventListener(E.IS_PAUSED_CHANGED, () => {
+        if (remoteReady()) CAST.lastPaused = !!CAST.player.isPaused;
+        renderCastTime(); updateUrl(true);
+      });
+      CAST.ctl.addEventListener(E.PLAYER_STATE_CHANGED, renderCastTime);
+      CAST.ctl.addEventListener(E.IS_MEDIA_LOADED_CHANGED, renderCastTime);
+      CAST.ctl.addEventListener(E.DURATION_CHANGED, renderCastTime);
+      ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, renderCastButton);
+      renderCastButton();
+      if (CAST.player.isConnected) onConnectedChanged(); // re-joined an existing session
+    } catch (e) {
+      CAST.ctx = null;
+      castUnavailable('sdk');
+    }
+  }
+  castBtn.addEventListener('click', () => {
+    if (!CAST.ctx) return;
+    if (CAST.connected) { try { CAST.ctx.endCurrentSession(true); } catch (e) {} }
+    else { try { const p = CAST.ctx.requestSession(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    castBtn.blur();
+  });
+
+  // Load the Cast sender. This does what Google's loader (cast_sender.js?loadCastFramework=1) does in Chrome/Edge,
+  // but with explicit https: URLs: that loader uses protocol-relative "//www.gstatic.com/..." URLs, which on a
+  // file:// page turn into file://www.gstatic.com/... (a Windows network-share path) and never load.
+  function loadCastSdk() {
+    const ua = navigator.userAgent, m = /Chrome\/(\d+)/.exec(ua), major = m ? Number(m[1]) : 0;
+    if (!window.chrome || !navigator.presentation || !major || /Edge\//.test(ua)) { castUnavailable('browser'); return; }
+    let apiReady = false, fwReady = false, settled = false;
+    const ready = () => { if (!settled && apiReady && fwReady) { settled = true; initCast(); } };
+    const fail = () => { if (!settled) { settled = true; castUnavailable('sdk'); } };
+    window.__onGCastApiAvailable = (ok) => { if (ok) { apiReady = true; ready(); } else fail(); };
+    const add = (src) => new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.async = true; s.src = src;
+      s.onload = () => res();
+      s.onerror = () => { s.remove(); rej(new Error('load failed')); };
+      document.head.appendChild(s);
+    });
+    const G = 'https://www.gstatic.com';
+    add(`${G}/cast/sdk/libs/sender/1.0/cast_framework.js`).then(() => { fwReady = true; ready(); }, fail);
+    const senders = [`${G}/eureka/clank/${major}/cast_sender.js`, `${G}/eureka/clank/${major - 1}/cast_sender.js`, `${G}/eureka/clank/cast_sender.js`];
+    (function next() { if (!senders.length) { fail(); return; } add(senders.shift()).catch(next); })();
+    setTimeout(fail, 20000);
+  }
+
+  // ---------- wiring ----------
+  $('loadBtn').addEventListener('click', () => loadFromInput(srcInput.value, 0));
+  srcInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); loadFromInput(srcInput.value, 0); srcInput.blur(); }
+  });
+  $('browseBtn').addEventListener('click', () => openBrowse(siteInput.value));
+  siteInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); openBrowse(siteInput.value); siteInput.blur(); }
+  });
+
+  let qs;
+  try { qs = new URLSearchParams(location.search); } catch (e) { qs = new URLSearchParams(); }
+  const lastSite = load(LS_SITE, '');
+  if (typeof lastSite === 'string' && lastSite) siteInput.value = lastSite;
+  if (qs.get('site')) openBrowse(qs.get('site'));
+  if (qs.get('src')) {
+    srcInput.value = qs.get('src');
+    loadFromInput(qs.get('src'), Number(qs.get('t')) || 0);
+  }
+  try { loadCastSdk(); } catch (e) { castUnavailable('sdk'); }
+})();
+</script>
+</body>
+</html>
