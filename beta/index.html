@@ -1432,6 +1432,33 @@
     try { const items = await decodeShared(m[1]); sharedPending = { items, hash: '#bm=' + m[1] }; }
     catch (e) { sharedPending = null; sharedError = (e && e.message) || 'malformed'; }
   }
+  // A share link for the game already open (same path and query) is a same-document navigation: no reload,
+  // only a hashchange. Apply its #bm= then (replacing any shared list), or clear the list if the fragment is gone.
+  // Our own history.replaceState updates never fire hashchange.
+  window.addEventListener('hashchange', async () => {
+    const m = /^#bm=(.*)$/.exec(location.hash || '');
+    if (!m) {
+      if (shared) { shared = null; sharedHash = ''; renderBookmarks(); }
+      return;
+    }
+    if ('#bm=' + m[1] === sharedHash) return;
+    if (!current) return; // nothing loaded to attach them to
+    const key = current.key;
+    let items;
+    try { items = await decodeShared(m[1]); } catch (e) {
+      if (!current || current.key !== key) return;
+      shared = null; sharedHash = ''; renderBookmarks();
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (err) {}
+      sharedError = (e && e.message) || 'malformed'; showSharedError();
+      return;
+    }
+    if (!current || current.key !== key) return; // a different game loaded meanwhile
+    shared = { key, items }; sharedHash = '#bm=' + m[1];
+    if (/^The shared bookmarks in this link/.test(noticeEl.textContent)) hideNotice(); // an earlier bad link's notice
+    renderBookmarks();
+    if (panelCollapsed) setPanel(false, false); // make sure they're visible
+    flash(`${items.length} shared bookmark${items.length === 1 ? '' : 's'}`);
+  });
   let sharedError = '';
   function showSharedError() {
     if (!sharedError) return;
