@@ -1,11 +1,12 @@
-# Game Film Viewer (Hudl / BlueFrame / GPAC streams)
+# Game Film Viewer (Hudl / BlueFrame / GPAC streams and YouTube)
 
-A single static page (`index.html`) that plays the HLS stream behind a Hudl vCloud / BlueFrame / GPAC Network game in a normal HTML5 `<video>` (via hls.js) with fast seeking, film-review shortcuts and bookmarks. No server, no install, no Node.
+A single static page (`index.html`) for watching game film. It plays the HLS stream behind a Hudl vCloud / BlueFrame / GPAC Network game in a normal HTML5 `<video>` (via hls.js), or a YouTube video in YouTube's player, with fast seeking, film-review shortcuts and bookmarks. No server, no install, no Node.
 
 ## Open it
 
 - Go to **https://film.origas.org** (this repo, served by GitHub Pages). Casting works from there, and links such as `https://film.origas.org/?src=4679968&t=5000` can be shared and bookmarked.
-- Or double-click `index.html` (works from `file://`, but Chrome may not offer casting there), or host it on any other static web host.
+- Or double-click `index.html` (works from `file://`, but Chrome may not offer casting there and YouTube refuses to play), or host it on any other static web host.
+- **https://film.origas.org/beta/** (`beta/`) is the test bed for upcoming changes.
 
 ## Load a game
 
@@ -16,39 +17,75 @@ Paste any of these into the top box and press Enter:
 - Embed URL or a whole `<iframe src="https://vcloud.hudl.com/broadcast/embed/4679968?...">` snippet
 - Broadcast ID: `4679968`
 - Direct `.m3u8` URL
+- YouTube link: `watch?v=`, `youtu.be/`, `/live/`, `/shorts/`, `/embed/` (an `<iframe>` snippet works), with an optional `t=` or `start=`. A bare YouTube ID needs a prefix: `yt:VIDEOID`. Hudl links take priority.
 - A timestamp copied from **Copy link**, e.g. `4679968 @ 1:23:20`
 
-No link? Type the school's site name in **Browse school** (e.g. `mountmarty`, `occambassadors`; for GPAC it's the part after `gpacnetwork.com/`) and pick a game. Live and upcoming games are listed first, then recent games (with **Load more**). The last school is remembered.
+The header shows the game's name, date and source, e.g. `Mount Marty vs Union · Oct 26, 2026, 5:00 PM · Hudl (mountmarty)`, and so does the browser tab title. Hudl dates and times come from the broadcast, in your time zone. YouTube gives no date, so the viewer uses a date written in the video title. If there isn't one and the video was picked from a channel list, it shows an approximate date from "Streamed 3d ago", marked with `~`. Otherwise no date is shown.
 
-### Search previous games
+## Find a game
 
-The school's game list has a search bar. It searches the school's **whole archive** on Hudl's server, not only the games already listed:
+### School search
+
+Type in the **School** box. Matches come from a built-in directory of 229 schools (Union Adventist, its opponents and their opponents). Case and punctuation don't matter. Partial words, word starts and initials all match, e.g. `Bellevue`, `neb wes`, `occ` (Ozark Christian College) and `Ozark`. Union and its opponents are listed first. Each result shows the state and badges: **Hudl** (or Hudl stale/none), **YouTube**, or another platform.
+
+- Pick a school with a Hudl site to open its game list.
+- If it has a YouTube channel, a **YouTube** button switches to its recent videos (and **Hudl games** switches back).
+- If a school isn't in the directory, the box searches Hudl's own list of sites, so any school on Hudl can still be found. **Search all Hudl schools for "…"** at the end of the list does the same on demand.
+
+You can also type a Hudl site name in **Hudl site** and press **Browse** (e.g. `mountmarty`, `occambassadors`; for GPAC it's the part after `gpacnetwork.com/`). The last one is remembered.
+
+The directory is generated from `directory/schools.json` by `directory/export_viewer.py`, which inlines it into the page between `/*SCHOOLS-START*/` and `/*SCHOOLS-END*/`. Run `python -I directory/export_viewer.py` for `beta/index.html` (the default), `--main` for this page, or give a path.
+
+### Union games
+
+**Union games** lists every Hudl game with "Union" in its title across Union's Hudl site and the Hudl sites of all of Union's opponents in the directory, newest first. **Union YouTube** shows Union's channel (@unionadventistlive).
+
+### Game lists
+
+A Hudl list shows live and upcoming games first, then recent games (with **Load more**).
+
+**Men's Basketball first.** Every Hudl list opens with **Sport** set to **Men's Basketball**, for both live/upcoming and recent games. Pick **All sports** or another sport to switch. If a school has no Men's Basketball games, the list says so and shows all sports instead. Men's Basketball also includes games filed under the generic "Basketball" sport (as Mount Marty does), except ones whose title says women's (Women's, Lady, WBB, (W) ...) without also saying men's. Because of that filter the archived count is shown as "up to N" when it can't be exact. Pick **Basketball** to see the generic sport on its own.
+
+The list's search bar searches the school's **whole archive** on Hudl's server, not only the games already listed:
 
 - **Search box**: an opponent or any word from the game title, e.g. `Hastings`, `volleyball`, `homecoming`. Case doesn't matter, partial words match (`hasti`), and with several words every word must appear in the title, in any order. It runs 0.4 s after you stop typing, or straight away when you press Enter. Esc clears it.
-- **Sport**: limits the search to one sport. The list shows the sports found in the school's 100 most recent games (plus any found as you search), because Hudl has no per-school sport list. A sport the school hasn't played recently may be missing; search its name in the title box instead.
+- **Sport**: the sports found in the school's 100 most recent games (plus any found as you search), because Hudl has no per-school sport list.
 - **From / To**: limits the search to a date range (whole days, your time zone).
-- The filters combine. Matches use the same list as recent games, newest first, with **Load more** past 30. **No matches** is shown when nothing fits. **Clear** (or emptying every filter) returns to the normal list.
+- The filters combine. **Clear** empties the search words and dates; the sport stays.
 
-Search only covers previous (archived) games, and only the title text: a game titled "Mount Marty vs Doane" won't match `volleyball` unless you pick the sport. Games shared with the school by another site (for example the opponent's home broadcast) are included, as on the school's own page. Hudl requires a school, so there is no all-schools search.
+Search only covers previous (archived) games, and only the title text. Games shared with the school by another site (for example the opponent's home broadcast) are included, as on the school's own page.
 
-Some older archived games use a legacy Hudl stream address that doesn't allow cross-site loading. For those the page fetches the playlist through the same Hudl JSONP endpoint it uses for lookups; the video itself still streams directly from Hudl's CDN.
+**The list folds away.** Picking a game from a list folds the list so the video gets the space. **▾ Games: …** brings it back exactly as it was: same school, tab, sport, search, loaded pages and scroll position. The list's **Close** closes it fully.
 
-The page looks up the stream URL for a broadcast ID through Hudl's own viewer endpoint (`vcloud.hudl.com/api/viewer/app/rss`, JSONP), and lists and searches games with `vcloud.hudl.com/api/viewer/broadcast` (JSONP; search uses its `title`, `section_id`, `after` and `before` parameters, the same ones BlueFrame's own widget sends). **This endpoint is undocumented and Hudl could change or remove it at any time**; if lookups start failing, that is the likely cause. Pasting a direct `.m3u8` URL still works regardless. Only the stream URL, title, date and status are kept from the lookup response.
+### YouTube channel lists
+
+A school's YouTube list shows its most recent **Live streams** or **Videos** (about 30, the most YouTube's page includes). Click one to play it.
+
+**Channel lists are fragile.** YouTube offers no key-free feed (its RSS feeds currently return errors), so the list is read from the channel's public page, fetched through the same undocumented Hudl proxy the viewer uses for game lookups. If YouTube changes that page or Hudl changes the proxy, the list fails with a link to open the channel on YouTube instead.
+
+## Playback
+
+- **Hudl:** quality is Auto or a fixed H.264 level. HEVC variants are hidden so every browser can play. Some older archived games use a legacy Hudl stream address that doesn't allow cross-site loading; for those the page fetches the playlist through the same Hudl JSONP endpoint it uses for lookups, and the video itself still streams directly from Hudl's CDN.
+- **YouTube:** the video plays in YouTube's player, and the usual shortcuts control it: play/pause, all the jumps, 0–9, speed (snapped to the speeds YouTube offers), reset speed, fullscreen and bookmarks. Frame step pauses and moves 1/30 s, but YouTube may only show the nearest frame it can decode. The quality menu and our Cast button are hidden: use the YouTube player's own settings and Cast button. If you click inside the YouTube player, YouTube's own keys apply until you click outside it. If YouTube refuses to play a video (removed, private, embedding disabled, or a local `file://` page), a message with an **Open on YouTube** link is shown.
+
+The page looks up the stream URL for a broadcast ID through Hudl's own viewer endpoint (`vcloud.hudl.com/api/viewer/app/rss`, JSONP), and lists and searches games with `vcloud.hudl.com/api/viewer/broadcast` (JSONP; search uses its `title`, `section_id`, `after` and `before` parameters, the same ones BlueFrame's own widget sends). **These endpoints are undocumented and Hudl could change or remove them at any time**; if lookups start failing, that is the likely cause. Pasting a direct `.m3u8` URL still works regardless. Only the stream URL, title, date and status are kept from the lookup response.
 
 ## Links and bookmarks
 
 - `?src=<link or ID>&t=<seconds>` loads a game and starts there; `?site=<slug>` opens the school's game list.
-- When the page runs at its own URL (https://film.origas.org, a local file or another static host), the address bar keeps `t` current and **Copy link** copies a resume link. Inside an embedded frame (such as an artifact page) it copies a timestamp like `4679968 @ 1:23:20` instead; paste that into the box to resume.
-- Bookmarks are saved per broadcast in this browser's localStorage (not synced between machines). Click a time to seek, type a note next to it, and use **Export** to download the list (also copied to the clipboard).
-- Quality: Auto, or a fixed H.264 level. HEVC variants are hidden so every browser can play.
+- **Address bar time:** when the page runs at its own URL (https://film.origas.org, a local file or another static host), the address bar's `t=` changes only while the game is paused (on pause, at the end, and after seeking or frame-stepping while paused), so it stays still and is easy to copy during playback. Reloading the page or going back to it resumes where you were, even mid-playback: the tab remembers the live position per game (sessionStorage). A link with its own `t=` always goes to that time.
+- **Copy link** copies a resume link at the live time. Inside an embedded frame (such as an artifact page) it copies a timestamp like `4679968 @ 1:23:20` instead; paste that into the box to resume.
+- **Bookmarks** are saved per game in this browser's localStorage (not synced between machines). Click a time to seek and type a note next to it.
+- **Sharing bookmarks:** the link icon in the bookmarks panel (**Copy link with bookmarks**) copies a link that opens this game with all your bookmarks, times and notes included. The bookmarks travel in the part of the link after `#`, which is never sent to a server. With no bookmarks it copies a plain link to the game at the current time. Opening such a link shows them under **Shared with you (not saved)**, separate from **My bookmarks**. Nothing is saved automatically, so a shared link can never overwrite anyone's own bookmarks. Use the save icon on a shared bookmark to add a copy to your bookmarks; it then shows as saved, and saving the same one twice doesn't duplicate it. The shared list stays while that game is loaded (a reload keeps it) and goes away when you load another game. A link with 30 typical bookmarks is about 500 characters.
+- **Panel size:** drag the left edge of the bookmarks/shortcuts panel to resize it (or focus the edge and use the arrow keys; double-click resets). The size is remembered. On narrow screens the panel sits below the video and isn't resizable.
 
 ## Casting (Chromecast / Google TV)
 
-Use https://film.origas.org (or another `https://` address) to cast. In Chrome or Edge, a **Cast** button appears in the control bar when a Cast device is found. It plays the current game on the TV, starting where you were, and pauses the page. While casting:
+Use https://film.origas.org (or another `https://` address) to cast Hudl games. In Chrome or Edge, a **Cast** button appears in the control bar when a Cast device is found. It plays the current game on the TV, starting where you were, and pauses the page. While casting:
 
 - The shortcuts and the bookmark list control the TV: play/pause, seeking, 0 to 9 jumps, and bookmarks (M marks the TV's current time). Frame step is off. Speed changes are sent to the TV, but the default Cast player may ignore them. If it does, the page says so.
-- The video area shows "Casting to *device*" with the TV's time, and the address bar's `t` follows the TV.
-- Loading another game plays it on the TV.
+- The video area shows "Casting to *device*" with the TV's time, and the address bar's `t` follows the TV when it pauses.
+- Loading another Hudl game plays it on the TV. Loading a YouTube video stops casting (use the YouTube player's own Cast button).
 - **Stop casting** (or stopping from the TV or Chrome) resumes playback here at the TV's position.
 
 Older (legacy) games are cast from their H.264 variant stream, because Hudl's legacy playlist address can't be read by the TV.
@@ -63,7 +100,7 @@ Older (legacy) games are cast from their H.264 variant stream, because Hudl's le
 | ← / → | Back / forward 5 s |
 | J / K | Back / forward 10 s |
 | Shift + ← / → | Back / forward 30 s |
-| , / . | Step one frame back / forward (~1/30 s, pauses; off while casting) |
+| , / . | Step one frame back / forward (~1/30 s, pauses; off while casting; approximate on YouTube) |
 | ↓ / ↑ (or [ / ]) | Slower / faster (0.25x to 2x) |
 | \ | Reset speed to 1x |
 | 0 to 9 | Jump to 0% to 90% |
