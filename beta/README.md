@@ -14,7 +14,7 @@ The header is a single slim bar while you watch, so the video gets the space.
   - A bare number is a broadcast ID. A `yt:VIDEOID` is a YouTube video.
 - **Quick chips** under the box: **Union games**, **Union YouTube**, and up to 4 recently opened schools or Hudl sites. Click × to remove one from the recent list.
 - **The game list** opens under the chips and works as before: Hudl/YouTube tabs, Sport (Men's Basketball first), search, dates and **Load more**. Its **Close** closes just the list.
-- **Folding:** picking a game, pressing Escape, or clicking outside the finder (while a game is loaded) folds it back to the slim bar. **Find a game** brings it back exactly as it was: box text, school, tab, sport, search, loaded pages and scroll position.
+- **Folding:** picking or loading a game, pressing Escape (while a game is loaded), or clicking **Find a game** again folds it back to the slim bar. Clicking elsewhere on the page leaves it open. **Find a game** brings it back exactly as it was: box text, school, tab, sport, search, loaded pages and scroll position.
 
 The separate paste box, the **Hudl site** box with **Browse**, and the **▾ Games:** bar are gone. Their jobs are done by the one box, the chips and **Find a game**. `?site=<slug>` links still open a Hudl site's game list.
 

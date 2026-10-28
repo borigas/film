@@ -2033,15 +2033,10 @@
   // A game is being loaded: fold the finder (if open) back to the slim bar, keeping its state.
   function collapseChooser() { foldFinder(); }
   findBtn.addEventListener('click', () => { if (finderOpen() && current) foldFinder(); else openFinder(true); });
-  // Escape (when nothing inside used it) or a click outside folds the finder, but only while a game is loaded.
+  // Escape (when nothing inside used it) folds the finder, but only while a game is loaded.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented || !finderOpen() || !current) return;
     e.preventDefault(); foldFinder(); focusPlayer();
-  });
-  document.addEventListener('pointerdown', (e) => {
-    if (!finderOpen() || !current) return;
-    if (finderEl.contains(e.target) || findBtn.contains(e.target) || noticeEl.contains(e.target)) return;
-    foldFinder();
   });
 
   // ---- quick chips: Union games, Union YouTube and the 4 most recent schools / lists ----
