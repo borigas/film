@@ -6,7 +6,7 @@ A single static page (`index.html`) for watching game film. It plays the HLS str
 
 - Go to **https://film.origas.org** (this repo, served by GitHub Pages). Casting works from there, and links such as `https://film.origas.org/?src=4679968&t=5000` can be shared and bookmarked.
 - Or double-click `index.html` (works from `file://`, but Chrome may not offer casting there and YouTube refuses to play), or host it on any other static web host.
-- **https://film.origas.org/beta/** (`beta/`) is the test bed for upcoming changes.
+- **https://film.origas.org/beta/** is the beta site (see [Beta](#beta)).
 
 ## The header
 
@@ -48,7 +48,7 @@ Type a school name in the **Find a game** box. Matches come from a built-in dire
 
 A Hudl site's list can also be opened with a link: `?site=<slug>` (e.g. `mountmarty`, `occambassadors`; for GPAC it's the part after `gpacnetwork.com/`), or by pasting a GPAC school page into the box.
 
-The directory is generated from `directory/schools.json` by `directory/export_viewer.py`, which inlines it into the page between `/*SCHOOLS-START*/` and `/*SCHOOLS-END*/`. Run `python -I directory/export_viewer.py` for `beta/index.html` (the default), `--main` for this page, or give a path.
+The school list is rebuilt each season; the tools and data are in `tools/directory/` (see `tools/directory/report.md` for the latest build's notes).
 
 ### Union games
 
@@ -103,6 +103,10 @@ Use https://film.origas.org (or another `https://` address) to cast Hudl games. 
 Older (legacy) games are cast from their H.264 variant stream, because Hudl's legacy playlist address can't be read by the TV.
 
 **Opened as a local file?** Chrome may not find Cast devices for a `file://` page. If no Cast button appears, click the small **Cast?** note for options: open it from https://film.origas.org instead, or use Chrome's ⋮ menu > **Cast...** to mirror the tab.
+
+## Beta
+
+**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently matches the main site apart from that label. Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
 
 ## Shortcuts
 

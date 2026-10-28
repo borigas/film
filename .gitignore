@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# School-list build caches (pass a cache dir outside the repo; these catch strays)
+tools/directory/cache/
+tools/directory/.cache/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
