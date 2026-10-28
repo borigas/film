@@ -227,7 +227,8 @@
   // Cast state. connected = a Cast session is up (local video stays paused, controls drive the TV).
   // loadedKey = the game (current.key) the TV is playing; timeKey/lastTime = last known TV time for that game.
   const CAST = { ctx: null, player: null, ctl: null, connected: false, device: '', loadSeq: 0, loadedKey: null,
-                 timeKey: null, lastTime: 0, lastPaused: false, plan: null, error: '', rate: 1, rateTimer: 0, unsupported: false };
+                 timeKey: null, lastTime: 0, lastPaused: false, plan: null, error: '', rate: 1, rateTimer: 0, unsupported: false,
+                 failed: false };
 
   // ---------- utils ----------
   function fmt(t) {
@@ -1173,18 +1174,31 @@
   function deviceName() {
     try { const s = castSession(), d = s && s.getCastDevice(); return (d && d.friendlyName) || ''; } catch (e) { return ''; }
   }
-  function renderCastButton() {
-    let show = false;
-    try { show = !!CAST.ctx && (CAST.connected || CAST.ctx.getCastState() !== cast.framework.CastState.NO_DEVICES_AVAILABLE); } catch (e) {}
-    castBtn.hidden = !show;
-    // One muted, collapsed hint, only where Cast can't work (local file, or a browser without Google Cast).
-    castHelp.hidden = show || !(IS_FILE || CAST.unsupported);
+  // Last Cast init outcome, for bug reports (shown in the Cast button / hint tooltips; also window.__castDiag).
+  const castDiag = window.__castDiag = { loader: '', sdkLoaded: false, isAvailable: null, reason: '', castState: '' };
+  function castDiagText() {
+    const d = castDiag;
+    return `Cast diag: loader=${d.loader || '-'}, sdkLoaded=${d.sdkLoaded}, isAvailable=${d.isAvailable}` +
+      `${d.reason ? ', reason=' + d.reason : ''}${d.castState ? ', state=' + d.castState : ''}`;
   }
-  castHelp.querySelector('span').textContent = IS_FILE
-    ? 'Casting needs this page served from a web address (e.g. GitHub Pages) — or use Chrome’s ⋮ > Cast to mirror this tab.'
-    : 'Casting needs Chrome or Edge.';
+  const CAST_MIRROR = 'use Chrome’s ⋮ > Cast… to mirror this tab.';
+  function renderCastButton() {
+    // Show the button whenever the Cast context is up. Don't hide it on NO_DEVICES_AVAILABLE: Chrome often doesn't
+    // discover devices until its Cast dialog opens, and requestSession() opens that dialog and does its own discovery.
+    const show = !!CAST.ctx;
+    try { if (CAST.ctx) castDiag.castState = String(CAST.ctx.getCastState()); } catch (e) {}
+    castBtn.hidden = !show;
+    if (!CAST.connected) castBtn.title = `Cast to a Chromecast / Google TV\n${castDiagText()}`;
+    // One muted, collapsed hint, only where Cast can't work (local file, no Google Cast, or the SDK failed).
+    castHelp.hidden = show || !(IS_FILE || CAST.unsupported || CAST.failed);
+    castHelp.querySelector('span').textContent = (IS_FILE
+      ? 'Casting needs this page served from a web address (e.g. GitHub Pages) — or ' + CAST_MIRROR
+      : CAST.unsupported ? 'Casting needs Chrome or Edge.' : 'Cast isn’t available here — ' + CAST_MIRROR) + ` (${castDiagText()})`;
+    castHelp.querySelector('summary').title = `Why is there no Cast button?\n${castDiagText()}`;
+  }
   function castUnavailable(reason) {
     CAST.unsupported = reason === 'browser';
+    CAST.failed = !CAST.unsupported;
     renderCastButton();
   }
   function renderCast() {
@@ -1192,7 +1206,7 @@
     castOverlay.hidden = !on;
     castBtn.classList.toggle('on', on);
     castBtn.querySelector('span').textContent = on ? 'Stop casting' : 'Cast';
-    castBtn.title = on ? 'Stop casting and continue here' : 'Cast to a Chromecast / Google TV';
+    castBtn.title = on ? 'Stop casting and continue here' : `Cast to a Chromecast / Google TV\n${castDiagText()}`;
     // The native controls would drive the (paused) local video, so hide them while casting.
     if (on) video.removeAttribute('controls'); else video.setAttribute('controls', '');
     if (on) { if (!CAST.device) CAST.device = deviceName(); castDevEl.textContent = `Casting to ${CAST.device || 'TV'}`; }
@@ -1361,26 +1375,44 @@
       if (CAST.player.isConnected) onConnectedChanged(); // re-joined an existing session
     } catch (e) {
       CAST.ctx = null;
+      castDiag.reason = 'init failed: ' + ((e && e.message) || e);
       castUnavailable('sdk');
     }
+  }
+  // requestSession() opens Chrome's device picker (which does its own discovery). It rejects with a
+  // chrome.cast.ErrorCode string; 'cancel' just means the user closed the picker.
+  function castRequestFailed(e) {
+    const code = String((e && (e.code || e.message)) || e || 'error');
+    castDiag.reason = 'requestSession: ' + code;
+    if (code === 'cancel') return;
+    flash(`Cast failed (${code})`);
+    setStatus(`Cast failed (${code}). Try Chrome’s ⋮ > Cast… instead.`, 'err');
   }
   castBtn.addEventListener('click', () => {
     if (!CAST.ctx) return;
     if (CAST.connected) { try { CAST.ctx.endCurrentSession(true); } catch (e) {} }
-    else { try { const p = CAST.ctx.requestSession(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    else { try { const p = CAST.ctx.requestSession(); if (p && p.catch) p.catch(castRequestFailed); } catch (e) { castRequestFailed(e); } }
     castBtn.blur();
   });
 
-  // Load the Cast sender. This does what Google's loader (cast_sender.js?loadCastFramework=1) does in Chrome/Edge,
-  // but with explicit https: URLs: that loader uses protocol-relative "//www.gstatic.com/..." URLs, which on a
-  // file:// page turn into file://www.gstatic.com/... (a Windows network-share path) and never load.
+  // Load the Cast sender. On http(s) use Google's documented loader. On file:// that loader can't work (it uses
+  // protocol-relative "//www.gstatic.com/..." URLs, which become file://www.gstatic.com/..., a Windows network-share
+  // path), so there we load the same scripts it would, with explicit https: URLs.
   function loadCastSdk() {
     const ua = navigator.userAgent, m = /Chrome\/(\d+)/.exec(ua), major = m ? Number(m[1]) : 0;
-    if (!window.chrome || !navigator.presentation || !major || /Edge\//.test(ua)) { castUnavailable('browser'); return; }
-    let apiReady = false, fwReady = false, settled = false;
-    const ready = () => { if (!settled && apiReady && fwReady) { settled = true; initCast(); } };
-    const fail = () => { if (!settled) { settled = true; castUnavailable('sdk'); } };
-    window.__onGCastApiAvailable = (ok) => { if (ok) { apiReady = true; ready(); } else fail(); };
+    castDiag.loader = IS_FILE ? 'manual' : 'official';
+    // /Edge\// is legacy (EdgeHTML) Edge only; Chromium Edge says "Edg/".
+    if (!window.chrome || !navigator.presentation || !major || /Edge\//.test(ua)) {
+      castDiag.loader = 'none'; castDiag.reason = 'browser without Google Cast';
+      castUnavailable('browser'); return;
+    }
+    let settled = false;
+    const fail = (reason) => {
+      if (settled) return;
+      settled = true; castDiag.reason = castDiag.reason || reason || 'unavailable';
+      castUnavailable('sdk');
+    };
+    const ok = () => { if (!settled) { settled = true; castDiag.isAvailable = true; initCast(); } };
     const add = (src) => new Promise((res, rej) => {
       const s = document.createElement('script');
       s.async = true; s.src = src;
@@ -1388,11 +1420,27 @@
       s.onerror = () => { s.remove(); rej(new Error('load failed')); };
       document.head.appendChild(s);
     });
+    setTimeout(() => fail('timed out after 20s'), 20000);
+    if (!IS_FILE) {
+      // Must be defined before the loader runs; it calls back (isAvailable, reason).
+      window.__onGCastApiAvailable = (isAvailable, reason) => {
+        castDiag.isAvailable = !!isAvailable;
+        if (isAvailable) ok(); else fail('isAvailable=false' + (reason ? ': ' + reason : ''));
+      };
+      add('https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1')
+        .then(() => { castDiag.sdkLoaded = true; }, () => fail('loader script failed to load'));
+      return;
+    }
+    let apiReady = false, fwReady = false;
+    const ready = () => { if (apiReady && fwReady) { castDiag.sdkLoaded = true; ok(); } };
+    window.__onGCastApiAvailable = (isAvailable, reason) => {
+      castDiag.isAvailable = !!isAvailable;
+      if (isAvailable) { apiReady = true; ready(); } else fail('isAvailable=false' + (reason ? ': ' + reason : ''));
+    };
     const G = 'https://www.gstatic.com';
-    add(`${G}/cast/sdk/libs/sender/1.0/cast_framework.js`).then(() => { fwReady = true; ready(); }, fail);
+    add(`${G}/cast/sdk/libs/sender/1.0/cast_framework.js`).then(() => { fwReady = true; ready(); }, () => fail('cast_framework.js failed to load'));
     const senders = [`${G}/eureka/clank/${major}/cast_sender.js`, `${G}/eureka/clank/${major - 1}/cast_sender.js`, `${G}/eureka/clank/cast_sender.js`];
-    (function next() { if (!senders.length) { fail(); return; } add(senders.shift()).catch(next); })();
-    setTimeout(fail, 20000);
+    (function next() { if (!senders.length) { fail('no cast_sender.js loaded'); return; } add(senders.shift()).catch(next); })();
   }
 
   // ---------- wiring ----------
@@ -1414,7 +1462,7 @@
     srcInput.value = qs.get('src');
     loadFromInput(qs.get('src'), Number(qs.get('t')) || 0);
   }
-  try { loadCastSdk(); } catch (e) { castUnavailable('sdk'); }
+  try { loadCastSdk(); } catch (e) { castDiag.reason = 'loadCastSdk threw: ' + ((e && e.message) || e); castUnavailable('sdk'); }
 })();
 </script>
 </body>
