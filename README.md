@@ -69,5 +69,6 @@ Older (legacy) games are cast from their H.264 variant stream, because Hudl's le
 | 0 to 9 | Jump to 0% to 90% |
 | M | Bookmark current time (type a note, Enter to finish) |
 | F | Fullscreen |
+| B | Hide / show the bookmarks and shortcuts panel (remembered; also the chevron button at the top of the panel) |
 
 Shortcuts are ignored while you type in a text field. While casting they control the TV.
