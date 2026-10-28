@@ -1239,9 +1239,21 @@
     return u;
   }
   // browseUrl for the open list: adds the list's fixed title words (e.g. "Union" for Union games) to any search.
+  // Men's Basketball also includes the generic "Basketball" sport(s): Hudl's section_id takes a comma list and
+  // returns one date-sorted, correctly paged result across them.
   function bUrl(st, viewerStatus, dir, page, f, perPage) {
     const q = [st.fixed, f && f.q].filter(Boolean).join(' ');
-    return browseUrl(st.slug, viewerStatus, dir, page, Object.assign({}, f || {}, { q }), perPage);
+    const x = Object.assign({}, f || {}, { q });
+    if (expands(st, x.section)) x.section = [x.section].concat([...st.genericIds]).join(',');
+    return browseUrl(st.slug, viewerStatus, dir, page, x, perPage);
+  }
+  function expands(st, section) { return section === DEFAULT_SECTION && !!(st.genericIds && st.genericIds.size); }
+  // A game in a generic Basketball section whose title says women's (and not also men's) is left out of Men's Basketball.
+  const WOMEN_RE = /\bwom[ae]n(?:['’]?s)?\b|\blad(?:y|ies)\b|\bWBB\b|\(W\)|\bW\s?BB\b/i;
+  const MEN_RE = /\bm[ae]n(?:['’]?s)?\b|\bMBB\b|\(M\)|\bM\s?BB\b/i;
+  function womenOnly(title) { const t = String(title || ''); return WOMEN_RE.test(t) && !MEN_RE.test(t); }
+  function keepGame(st, section, b) {
+    return !(expands(st, section) && st.genericIds.has(String(b.section_id)) && womenOnly(b.title));
   }
   // "2025-01-31" (a local calendar day) -> ISO instant at the start or end of that day.
   function dayBound(ymd, end) {
@@ -1313,7 +1325,7 @@
     // Lists open filtered to DEFAULT_SECTION (Men's Basketball). The unfiltered page of 100 recent games fills the
     // Sport menu with every sport the school uses (and tells "no games at all" apart from "no Men's Basketball").
     const st = browseState;
-    st.sections = new Map(SEED_SECTIONS); st.rKey = ''; st.rSeq = 0; st.timer = 0; st.nSeq = 0; st.normalSection = null;
+    st.sections = new Map(SEED_SECTIONS); st.genericIds = new Set(GENERIC_BASKETBALL); st.rKey = ''; st.rSeq = 0; st.timer = 0; st.nSeq = 0; st.normalSection = null;
     const df = { section: DEFAULT_SECTION };
     const [live, past, all] = await Promise.allSettled([
       jsonp(bUrl(st, 3, 'asc', 1, df), 15000),
@@ -1323,6 +1335,7 @@
     if (!browseState || browseState.seq !== seq) return;
     const listOf = (p) => (p.status === 'fulfilled' && p.value && Array.isArray(p.value.broadcasts) ? p.value.broadcasts : []);
     const liveList = listOf(live), pastList = listOf(past), allList = listOf(all);
+    const keep = (b) => keepGame(st, DEFAULT_SECTION, b);
     browseEl.innerHTML = '';
     const mine = (b) => String(b.site || '').toLowerCase() === slug;
     const siteTitle = opts.multi ? '' : (allList.find(mine) || pastList.find(mine) || liveList.find(mine) || {}).site_title;
@@ -1354,7 +1367,7 @@
     st.bar.querySelector('[data-f="section"]').value = DEFAULT_SECTION;
     st.rKey = JSON.stringify(readFilters(st));
     if (live.status === 'rejected' && past.status === 'rejected') { loadNormal(st, DEFAULT_SECTION); return; } // retry once
-    if (!liveList.length && !pastList.length) {
+    if (!liveList.some(keep) && !pastList.some(keep)) {
       // No Men's Basketball here: say so and show every sport instead.
       setSportSelect(st, '');
       loadNormal(st, '', { note: `No ${sectionName(st, DEFAULT_SECTION)} games for ${st.label} — showing all sports.` });
@@ -1365,6 +1378,9 @@
   }
   const DEFAULT_SECTION = '45'; // Hudl section_id for Men's Basketball
   const SEED_SECTIONS = [[DEFAULT_SECTION, "Men's Basketball"]]; // always offered, even if this school has none
+  // Hudl section ids are global (api/viewer/section lists each with site: null); "Basketball" is id 1.
+  // Any other section titled exactly "Basketball" seen in a school's games is added too (addSections).
+  const GENERIC_BASKETBALL = ['1'];
   function sectionName(st, id) { return (st.sections && st.sections.get(id)) || (id === DEFAULT_SECTION ? "Men's Basketball" : 'selected sport'); }
   function setSportSelect(st, id) {
     st.bar.querySelector('[data-f="section"]').value = id;
@@ -1390,16 +1406,22 @@
     const liveList = live.status === 'fulfilled' && live.value && Array.isArray(live.value.broadcasts) ? live.value.broadcasts : [];
     renderNormal(st, section, liveList, past.status === 'fulfilled' ? past.value : null, opts.note || '');
   }
-  function renderNormal(st, section, liveList, pastResp, note) {
-    const pastList = pastResp && Array.isArray(pastResp.broadcasts) ? pastResp.broadcasts : [];
+  function renderNormal(st, section, liveRaw, pastResp, note) {
+    const pastRaw = pastResp && Array.isArray(pastResp.broadcasts) ? pastResp.broadcasts : [];
     const slug = st.home;
     st.normal.innerHTML = ''; st.page = 1;
-    addSections(st, liveList.concat(pastList));
+    addSections(st, liveRaw.concat(pastRaw));
+    const keep = (b) => keepGame(st, section, b);
+    const liveList = liveRaw.filter(keep), pastList = pastRaw.filter(keep);
     const stat = document.createElement('div'); stat.className = 'bstat';
     if (note) { const s = document.createElement('strong'); s.textContent = note; stat.appendChild(s); }
     else if (section && (liveList.length || pastList.length)) {
-      const total = Number(pastResp && pastResp.item_count) || pastList.length;
-      stat.textContent = `${sectionName(st, section)} only (${total} archived). Change Sport to see others.`;
+      const total = Number(pastResp && pastResp.item_count) || pastRaw.length;
+      // Hudl's count includes women's games hidden from generic Basketball, so it's exact only when everything is on this page.
+      const onePage = (Number(pastResp && pastResp.num_pages) || 1) <= 1;
+      stat.textContent = expands(st, section)
+        ? `${sectionName(st, section)} only, including men's games filed under "Basketball" (${onePage || total === pastList.length ? pastList.length : 'up to ' + total} archived). Change Sport to see others.`
+        : `${sectionName(st, section)} only (${total} archived). Change Sport to see others.`;
     }
     if (stat.childNodes.length) st.normal.appendChild(stat);
     if (!liveList.length && !pastList.length) {
@@ -1421,7 +1443,7 @@
     pastList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
     if (!pastList.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No archived games.'; st.normal.appendChild(d); }
     const pages = pastResp ? Number(pastResp.num_pages) || 1 : 1;
-    if (pastList.length >= 30 && pages > 1) st.normal.appendChild(moreButton('past'));
+    if (pastRaw.length >= 30 && pages > 1) st.normal.appendChild(moreButton('past')); // paging follows Hudl's pages
   }
   function moreButton(list) {
     const more = document.createElement('button');
@@ -1444,6 +1466,7 @@
     list.forEach((b) => {
       const id = String(b.section_id || ''), title = String(b.section_title || '').trim();
       if (/^\d+$/.test(id) && title && !st.sections.has(id)) { st.sections.set(id, title); changed = true; }
+      if (/^\d+$/.test(id) && /^basketball$/i.test(title) && st.genericIds) st.genericIds.add(id);
     });
     const sel = st.bar.querySelector('[data-f="section"]'), keep = sel.value;
     if (!changed && sel.options.length === st.sections.size + 1) return;
@@ -1462,7 +1485,7 @@
   function describeFilters(st, f) {
     const bits = [];
     if (f.q) bits.push(`"${f.q}"`);
-    if (f.section) bits.push(st.sections.get(f.section) || 'selected sport');
+    if (f.section) bits.push((st.sections.get(f.section) || 'selected sport') + (expands(st, f.section) ? ' (incl. men\'s games under "Basketball")' : ''));
     if (f.from) bits.push(`from ${f.from}`);
     if (f.to) bits.push(`to ${f.to}`);
     return bits.join(', ');
@@ -1503,8 +1526,9 @@
       return;
     }
     if (browseState !== st || st.rSeq !== seq) return;
-    const list = Array.isArray(r && r.broadcasts) ? r.broadcasts : [];
-    addSections(st, list);
+    const raw = Array.isArray(r && r.broadcasts) ? r.broadcasts : [];
+    addSections(st, raw);
+    const list = raw.filter((b) => keepGame(st, f.section, b));
     st.rFilters = f; st.rPage = 1;
     const what = describeFilters(st, f);
     stat.textContent = '';
@@ -1513,13 +1537,16 @@
       stat.appendChild(s); stat.appendChild(document.createTextNode(` for ${what} in previous games for ${st.label || st.slug}.`));
       return;
     }
-    const total = Number(r.item_count) || list.length;
-    const s = document.createElement('strong'); s.textContent = `${total} ${total === 1 ? 'match' : 'matches'}`;
+    const onePage = (Number(r.num_pages) || 1) <= 1;
+    // Hudl's count includes women's games hidden from generic Basketball: exact only when everything is on this page.
+    const total = expands(st, f.section) && onePage ? list.length : Number(r.item_count) || raw.length;
+    const approx = expands(st, f.section) && total !== list.length;
+    const s = document.createElement('strong'); s.textContent = `${approx ? 'Up to ' : ''}${total} ${total === 1 ? 'match' : 'matches'}`;
     stat.appendChild(s); stat.appendChild(document.createTextNode(` for ${what}`));
     const ul = document.createElement('ul'); ul.className = 'games'; ul.id = 'searchGames';
     list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
     st.results.appendChild(ul);
-    if (list.length >= 30 && (Number(r.num_pages) || 1) > 1) st.results.appendChild(moreButton('results'));
+    if (raw.length >= 30 && (Number(r.num_pages) || 1) > 1) st.results.appendChild(moreButton('results'));
   }
   async function loadMore(btn) {
     if (!browseState) return;
@@ -1528,11 +1555,12 @@
     btn.disabled = true; btn.textContent = 'Loading...';
     try {
       const nSeq = st.nSeq;
-      const r = await jsonp(bUrl(st, 4, 'desc', page, isResults ? st.rFilters : (st.normalSection ? { section: st.normalSection } : null)), 15000);
+      const section = isResults ? st.rFilters.section : st.normalSection;
+      const r = await jsonp(bUrl(st, 4, 'desc', page, isResults ? st.rFilters : (section ? { section } : null)), 15000);
       if (browseState !== st || (isResults && st.rSeq !== seq) || (!isResults && st.nSeq !== nSeq)) return;
-      const list = r && Array.isArray(r.broadcasts) ? r.broadcasts : [];
+      const list = r && Array.isArray(r.broadcasts) ? r.broadcasts : []; // raw page: drives paging
       const ul = $(isResults ? 'searchGames' : 'pastGames');
-      list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
+      list.filter((b) => keepGame(st, section, b)).forEach((b) => ul.appendChild(gameItem(b, st.slug)));
       addSections(st, list);
       if (isResults) st.rPage = page; else st.page = page;
       if (list.length < 30 || page >= (Number(r.num_pages) || 1)) btn.remove();

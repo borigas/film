@@ -4,7 +4,7 @@ Served at **https://film.origas.org/beta/**. It is the main viewer (see `../READ
 
 ## Men's Basketball first
 
-Every Hudl game list (Browse, a picked school, Union games, `?site=` links) opens with **Sport** set to **Men's Basketball**, for both Live & upcoming and Recent games. Pick **All sports** or another sport in the menu to switch. If a school has no Men's Basketball games, the list says so and shows all sports instead. Some schools file games under a generic sport such as "Basketball", so check **All sports** if a game seems to be missing.
+Every Hudl game list (Browse, a picked school, Union games, `?site=` links) opens with **Sport** set to **Men's Basketball**, for both Live & upcoming and Recent games. Pick **All sports** or another sport in the menu to switch. If a school has no Men's Basketball games, the list says so and shows all sports instead. Men's Basketball also includes games filed under the generic "Basketball" sport (as Mount Marty does), except ones whose title says women's (Women's, Lady, WBB, (W) ...) without also saying men's. Because of that filter, the archived count is shown as "up to N" when it can't be exact. Pick **Basketball** in the menu to see the generic sport on its own.
 
 ## School search
 
