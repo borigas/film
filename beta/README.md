@@ -2,6 +2,10 @@
 
 Served at **https://film.origas.org/beta/**. It is the main viewer (see `../README.md`) plus the features below. Keyboard shortcuts, bookmarks, Copy link, Cast and the Hudl Browse/search are unchanged. Deep links work here too, e.g. `https://film.origas.org/beta/?src=4679968&t=5000` or `?site=mountmarty`.
 
+## Men's Basketball first
+
+Every Hudl game list (Browse, a picked school, Union games, `?site=` links) opens with **Sport** set to **Men's Basketball**, for both Live & upcoming and Recent games. Pick **All sports** or another sport in the menu to switch. If a school has no Men's Basketball games, the list says so and shows all sports instead. Some schools file games under a generic sport such as "Basketball", so check **All sports** if a game seems to be missing.
+
 ## School search
 
 Type in the **School** box. Matches come from a built-in directory of 229 schools (Union Adventist, its opponents and their opponents). Case and punctuation don't matter. Partial words, word starts and initials all match, e.g. `Bellevue`, `neb wes`, `occ` (Ozark Christian College) and `Ozark`. Union and its opponents are listed first. Each result shows the state and badges: **Hudl** (or Hudl stale/none), **YouTube**, or another platform.

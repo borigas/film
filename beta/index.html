@@ -1310,41 +1310,107 @@
     browseEl.innerHTML = '';
     browseHead(st0.label);
     const ld = document.createElement('div'); ld.className = 'empty'; ld.textContent = 'Loading games...'; browseEl.appendChild(ld);
-    const [live, past] = await Promise.allSettled([
-      jsonp(bUrl(st0, 3, 'asc', 1), 15000),
-      jsonp(bUrl(st0, 4, 'desc', 1), 15000),
+    // Lists open filtered to DEFAULT_SECTION (Men's Basketball). The unfiltered page of 100 recent games fills the
+    // Sport menu with every sport the school uses (and tells "no games at all" apart from "no Men's Basketball").
+    const st = browseState;
+    st.sections = new Map(SEED_SECTIONS); st.rKey = ''; st.rSeq = 0; st.timer = 0; st.nSeq = 0; st.normalSection = null;
+    const df = { section: DEFAULT_SECTION };
+    const [live, past, all] = await Promise.allSettled([
+      jsonp(bUrl(st, 3, 'asc', 1, df), 15000),
+      jsonp(bUrl(st, 4, 'desc', 1, df), 15000),
+      jsonp(bUrl(st, 4, 'desc', 1, null, 100), 15000),
     ]);
     if (!browseState || browseState.seq !== seq) return;
-    const liveList = live.status === 'fulfilled' && live.value && Array.isArray(live.value.broadcasts) ? live.value.broadcasts : [];
-    const pastList = past.status === 'fulfilled' && past.value && Array.isArray(past.value.broadcasts) ? past.value.broadcasts : [];
+    const listOf = (p) => (p.status === 'fulfilled' && p.value && Array.isArray(p.value.broadcasts) ? p.value.broadcasts : []);
+    const liveList = listOf(live), pastList = listOf(past), allList = listOf(all);
     browseEl.innerHTML = '';
     const mine = (b) => String(b.site || '').toLowerCase() === slug;
-    const siteTitle = opts.multi ? '' : (pastList.find(mine) || liveList.find(mine) || {}).site_title;
+    const siteTitle = opts.multi ? '' : (allList.find(mine) || pastList.find(mine) || liveList.find(mine) || {}).site_title;
     browseHead(opts.label ? opts.label : (siteTitle ? `${String(siteTitle).trim()} (${slug})` : slug));
+    if (!opts.label && siteTitle) st.label = String(siteTitle).trim(); // used in messages
     if (opts.note) {
       const d = document.createElement('div'); d.className = 'bstat';
-      const total = past.status === 'fulfilled' ? Number(past.value.item_count) || 0 : 0;
-      d.textContent = (total ? `${total} archived games. ` : '') + opts.note;
+      const total = all.status === 'fulfilled' ? Number(all.value.item_count) || 0 : 0;
+      d.textContent = (total ? `${total} archived games (all sports). ` : '') + opts.note;
       browseEl.appendChild(d);
     }
-    if (live.status === 'rejected' && past.status === 'rejected') {
+    if (live.status === 'rejected' && past.status === 'rejected' && all.status === 'rejected') {
       const d = document.createElement('div'); d.className = 'empty';
       d.textContent = `Couldn't load games: ${past.reason && past.reason.message || 'error'}`;
       browseEl.appendChild(d); return;
     }
-    if (!liveList.length && !pastList.length) {
+    if (!liveList.length && !pastList.length && !allList.length && all.status === 'fulfilled') {
       const d = document.createElement('div'); d.className = 'empty';
       d.textContent = opts.multi || opts.label ? `No games found on Hudl for ${opts.label || slug}.`
         : `No games found for "${slug}". Check the site name (the part after gpacnetwork.com/ or in the school's Hudl/BlueFrame page).`;
       browseEl.appendChild(d); return;
     }
-    if (opts.multi) slug = ''; // gameItem then names each game's host school
     // Search bar (previous games only), then the normal list and a results area that replaces it while searching.
-    const st = browseState;
-    st.sections = new Map(); st.rKey = ''; st.rSeq = 0; st.timer = 0;
+    st.home = opts.multi ? '' : slug; // gameItem names each game's host school unless it is this school
     st.bar = buildSearchBar(); browseEl.appendChild(st.bar);
     st.normal = document.createElement('div'); browseEl.appendChild(st.normal);
     st.results = document.createElement('div'); st.results.hidden = true; browseEl.appendChild(st.results);
+    addSections(st, allList.concat(liveList, pastList));
+    st.bar.querySelector('[data-f="section"]').value = DEFAULT_SECTION;
+    st.rKey = JSON.stringify(readFilters(st));
+    if (live.status === 'rejected' && past.status === 'rejected') { loadNormal(st, DEFAULT_SECTION); return; } // retry once
+    if (!liveList.length && !pastList.length) {
+      // No Men's Basketball here: say so and show every sport instead.
+      setSportSelect(st, '');
+      loadNormal(st, '', { note: `No ${sectionName(st, DEFAULT_SECTION)} games for ${st.label} — showing all sports.` });
+      return;
+    }
+    st.normalSection = DEFAULT_SECTION;
+    renderNormal(st, DEFAULT_SECTION, liveList, past.status === 'fulfilled' ? past.value : null, '');
+  }
+  const DEFAULT_SECTION = '45'; // Hudl section_id for Men's Basketball
+  const SEED_SECTIONS = [[DEFAULT_SECTION, "Men's Basketball"]]; // always offered, even if this school has none
+  function sectionName(st, id) { return (st.sections && st.sections.get(id)) || (id === DEFAULT_SECTION ? "Men's Basketball" : 'selected sport'); }
+  function setSportSelect(st, id) {
+    st.bar.querySelector('[data-f="section"]').value = id;
+    st.rKey = JSON.stringify(readFilters(st));
+  }
+  // The default (non-search) view: live & upcoming plus recent games, both for one sport ('' = all sports).
+  async function loadNormal(st, section, opts) {
+    opts = opts || {};
+    const seq = ++st.nSeq;
+    st.normalSection = section;
+    st.normal.innerHTML = '';
+    const ld = document.createElement('div'); ld.className = 'empty'; ld.textContent = 'Loading games...'; st.normal.appendChild(ld);
+    const f = section ? { section } : null;
+    const [live, past] = await Promise.allSettled([jsonp(bUrl(st, 3, 'asc', 1, f), 15000), jsonp(bUrl(st, 4, 'desc', 1, f), 15000)]);
+    if (browseState !== st || st.nSeq !== seq) return;
+    if (live.status === 'rejected' && past.status === 'rejected') {
+      st.normalSection = null; // a later change of sport (or picking it again) retries
+      st.normal.innerHTML = '';
+      const d = document.createElement('div'); d.className = 'empty';
+      d.textContent = `Couldn't load games: ${past.reason && past.reason.message || 'error'}`;
+      st.normal.appendChild(d); return;
+    }
+    const liveList = live.status === 'fulfilled' && live.value && Array.isArray(live.value.broadcasts) ? live.value.broadcasts : [];
+    renderNormal(st, section, liveList, past.status === 'fulfilled' ? past.value : null, opts.note || '');
+  }
+  function renderNormal(st, section, liveList, pastResp, note) {
+    const pastList = pastResp && Array.isArray(pastResp.broadcasts) ? pastResp.broadcasts : [];
+    const slug = st.home;
+    st.normal.innerHTML = ''; st.page = 1;
+    addSections(st, liveList.concat(pastList));
+    const stat = document.createElement('div'); stat.className = 'bstat';
+    if (note) { const s = document.createElement('strong'); s.textContent = note; stat.appendChild(s); }
+    else if (section && (liveList.length || pastList.length)) {
+      const total = Number(pastResp && pastResp.item_count) || pastList.length;
+      stat.textContent = `${sectionName(st, section)} only (${total} archived). Change Sport to see others.`;
+    }
+    if (stat.childNodes.length) st.normal.appendChild(stat);
+    if (!liveList.length && !pastList.length) {
+      const d = document.createElement('div'); d.className = 'empty';
+      if (section) {
+        d.textContent = `No ${sectionName(st, section)} games for ${st.label}. `;
+        const b = document.createElement('button'); b.type = 'button'; b.dataset.act = 'allsports'; b.textContent = 'Show all sports';
+        d.appendChild(b);
+      } else d.textContent = `No games found for ${st.label}.`;
+      st.normal.appendChild(d); return;
+    }
     if (liveList.length) {
       const h3 = document.createElement('h3'); h3.textContent = 'Live & upcoming'; st.normal.appendChild(h3);
       const ul = document.createElement('ul'); ul.className = 'games';
@@ -1354,14 +1420,8 @@
     const ul = document.createElement('ul'); ul.className = 'games'; ul.id = 'pastGames';
     pastList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
     if (!pastList.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No archived games.'; st.normal.appendChild(d); }
-    const pages = past.status === 'fulfilled' ? Number(past.value.num_pages) || 1 : 1;
+    const pages = pastResp ? Number(pastResp.num_pages) || 1 : 1;
     if (pastList.length >= 30 && pages > 1) st.normal.appendChild(moreButton('past'));
-    // Sport list: Hudl's sections endpoint isn't per school, so collect the sections this school actually uses
-    // from what we've loaded plus one background page of its 100 most recent archived games.
-    addSections(st, liveList.concat(pastList));
-    jsonp(bUrl(st, 4, 'desc', 1, null, 100), 15000)
-      .then((r) => { if (browseState === st && r && Array.isArray(r.broadcasts)) addSections(st, r.broadcasts); })
-      .catch(() => {});
   }
   function moreButton(list) {
     const more = document.createElement('button');
@@ -1385,8 +1445,8 @@
       const id = String(b.section_id || ''), title = String(b.section_title || '').trim();
       if (/^\d+$/.test(id) && title && !st.sections.has(id)) { st.sections.set(id, title); changed = true; }
     });
-    if (!changed) return;
     const sel = st.bar.querySelector('[data-f="section"]'), keep = sel.value;
+    if (!changed && sel.options.length === st.sections.size + 1) return;
     while (sel.options.length > 1) sel.remove(1);
     [...st.sections].sort((a, b) => a[1].localeCompare(b[1])).forEach(([id, title]) => {
       const o = document.createElement('option'); o.value = id; o.text = title; sel.appendChild(o);
@@ -1419,10 +1479,15 @@
     if (key === st.rKey && !force) return;
     st.rKey = key;
     const seq = ++st.rSeq;
-    const active = !!(f.q || f.section || f.from || f.to);
+    // Sport alone isn't a search: it re-filters the normal view (live & upcoming + recent games).
+    const active = !!(f.q || f.from || f.to);
     st.bar.querySelector('[data-act="clear"]').hidden = !active;
     st.results.innerHTML = '';
-    if (!active) { st.results.hidden = true; st.normal.hidden = false; return; }
+    if (!active) {
+      st.results.hidden = true; st.normal.hidden = false;
+      if (f.section !== st.normalSection) loadNormal(st, f.section);
+      return;
+    }
     st.normal.hidden = true; st.results.hidden = false;
     const stat = document.createElement('div'); stat.className = 'bstat'; stat.setAttribute('role', 'status');
     stat.textContent = 'Searching all previous games...';
@@ -1462,8 +1527,9 @@
     const page = (isResults ? st.rPage : st.page) + 1;
     btn.disabled = true; btn.textContent = 'Loading...';
     try {
-      const r = await jsonp(bUrl(st, 4, 'desc', page, isResults ? st.rFilters : null), 15000);
-      if (browseState !== st || (isResults && st.rSeq !== seq)) return;
+      const nSeq = st.nSeq;
+      const r = await jsonp(bUrl(st, 4, 'desc', page, isResults ? st.rFilters : (st.normalSection ? { section: st.normalSection } : null)), 15000);
+      if (browseState !== st || (isResults && st.rSeq !== seq) || (!isResults && st.nSeq !== nSeq)) return;
       const list = r && Array.isArray(r.broadcasts) ? r.broadcasts : [];
       const ul = $(isResults ? 'searchGames' : 'pastGames');
       list.forEach((b) => ul.appendChild(gameItem(b, st.slug)));
@@ -1473,8 +1539,8 @@
       else { btn.disabled = false; btn.textContent = 'Load more'; }
     } catch (e) { btn.disabled = false; btn.textContent = 'Load more (retry)'; }
   }
-  function clearSearch(st) {
-    st.bar.querySelectorAll('[data-f]').forEach((el) => { el.value = ''; });
+  function clearSearch(st) { // clears the search words and dates; the Sport choice stays
+    st.bar.querySelectorAll('[data-f]').forEach((el) => { if (el.dataset.f !== 'section') el.value = ''; });
     runSearch(st);
   }
   browseEl.addEventListener('input', (e) => {
@@ -1496,6 +1562,10 @@
     if (el.dataset.act === 'close') { browseEl.className = ''; return; }
     if (el.dataset.act === 'more') { loadMore(el); return; }
     if (el.dataset.act === 'clear') { if (browseState && browseState.bar) clearSearch(browseState); return; }
+    if (el.dataset.act === 'allsports') {
+      if (browseState && browseState.bar) { browseState.bar.querySelector('[data-f="section"]').value = ''; runSearch(browseState); }
+      return;
+    }
     if (el.dataset.act === 'src') { showSource(el.dataset.src); return; }
     if (el.dataset.act === 'ytkind') {
       const y = browseState && browseState.yt;
