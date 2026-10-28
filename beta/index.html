@@ -55,6 +55,8 @@
   #browse { display: none; margin: 0; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
     max-height: 55vh; overflow: auto; }
   #browse.open { display: block; }
+  #chooserBar { padding: 6px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  #chooserBtn { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #browse h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 6px; }
   #browse h3:first-child { margin-top: 0; }
   .bhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -214,6 +216,7 @@
 </header>
 
 <div id="notice" role="status"></div>
+<div id="chooserBar" hidden><button id="chooserBtn" type="button" aria-controls="browse" aria-expanded="false" title="Show the game list again">&#9662; Games: <span></span></button></div>
 <div id="browse" aria-label="School games"></div>
 
 <main>
@@ -688,7 +691,7 @@
       return;
     }
     const seq = ++loadSeq;
-    browseEl.className = '';
+    collapseChooser(); // a game is being loaded: fold an open chooser away (keeps its state)
     if (p.yt) {
       startYouTube(p.yt, startAt || p.t || 0, seq);
       return;
@@ -1384,12 +1387,12 @@
     let slug;
     if (opts.multi) slug = String(slugRaw || '').split(',').map((x) => x.trim().toLowerCase()).filter((x) => /^[a-z0-9_-]{2,64}$/.test(x)).join(',');
     else slug = String(slugRaw || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').replace(/[/?#].*$/, '');
-    if (!slug || (!opts.multi && !/^[a-z0-9_-]{2,64}$/.test(slug))) { browseEl.className = 'open'; browseEl.innerHTML = '<div class="empty">Enter a school\'s site name, e.g. <code>mountmarty</code> (the part after gpacnetwork.com/).</div>'; return; }
+    if (!slug || (!opts.multi && !/^[a-z0-9_-]{2,64}$/.test(slug))) { openChooser(); browseEl.innerHTML = '<div class="empty">Enter a school\'s site name, e.g. <code>mountmarty</code> (the part after gpacnetwork.com/).</div>'; return; }
     if (!opts.multi) { siteInput.value = slug; store(LS_SITE, slug); }
     const seq = (browseState ? browseState.seq : 0) + 1;
     browseState = { slug, page: 1, seq, fixed: opts.fixed || '', label: opts.label || slug, multi: !!opts.multi };
     const st0 = browseState;
-    browseEl.className = 'open';
+    openChooser();
     browseEl.innerHTML = '';
     browseHead(st0.label);
     const ld = document.createElement('div'); ld.className = 'empty'; ld.textContent = 'Loading games...'; browseEl.appendChild(ld);
@@ -1658,7 +1661,7 @@
   });
   browseEl.addEventListener('click', (e) => {
     const el = e.target.closest('button'); if (!el) return;
-    if (el.dataset.act === 'close') { browseEl.className = ''; return; }
+    if (el.dataset.act === 'close') { closeChooser(); return; }
     if (el.dataset.act === 'more') { loadMore(el); return; }
     if (el.dataset.act === 'clear') { if (browseState && browseState.bar) clearSearch(browseState); return; }
     if (el.dataset.act === 'allsports') {
@@ -1675,18 +1678,45 @@
       const id = el.dataset.yt;
       titleHint = { key: 'yt:' + id, title: el.dataset.title || '', sub: el.dataset.sub || 'YouTube' };
       srcInput.value = `https://youtu.be/${id}`;
-      browseEl.className = '';
+      collapseChooser();
       loadFromInput(srcInput.value, 0);
-      try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
+      focusPlayer();
       return;
     }
     if (el.dataset.id) {
       srcInput.value = el.dataset.id;
-      browseEl.className = '';
+      collapseChooser();
       loadFromInput(el.dataset.id, 0);
-      try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
+      focusPlayer();
     }
   });
+
+  // ---------- game chooser: folds away once a game is picked, with a button to bring it back unchanged ----------
+  // Folding only hides #browse (display: none), so the list, filters, loaded pages and search state all stay as they were.
+  const chooserBar = $('chooserBar'), chooserBtn = $('chooserBtn');
+  let chooserScroll = 0;
+  function openChooser() { browseEl.className = 'open'; chooserBar.hidden = true; chooserBtn.setAttribute('aria-expanded', 'true'); }
+  function closeChooser() { browseEl.className = ''; chooserBar.hidden = true; chooserBtn.setAttribute('aria-expanded', 'false'); }
+  function collapseChooser() {
+    if (!browseEl.classList.contains('open')) return; // nothing open: a pasted link adds no button
+    chooserScroll = browseEl.scrollTop;
+    const h = browseEl.querySelector('.bhead strong');
+    chooserBtn.querySelector('span').textContent = (h && h.textContent.trim()) || 'game list';
+    browseEl.className = '';
+    chooserBar.hidden = false; chooserBtn.setAttribute('aria-expanded', 'false');
+  }
+  function restoreChooser() {
+    openChooser();
+    browseEl.scrollTop = chooserScroll;
+    try { browseEl.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  }
+  chooserBtn.addEventListener('click', restoreChooser);
+  // Send keys to the player (not the hidden list button) so the shortcuts keep working.
+  function focusPlayer() {
+    try { $('videoWrap').scrollIntoView({ block: 'nearest' }); } catch (err) {}
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    if (!YTP.on) { try { video.focus({ preventScroll: true }); } catch (e) {} }
+  }
 
   // ---------- school directory: sources, Union games preset, YouTube channel lists ----------
   const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/, HANDLE = /^@[A-Za-z0-9._-]{1,100}$/;
@@ -1729,7 +1759,7 @@
   }
   function showNoSource(sc) {
     browseState = { seq: (browseState ? browseState.seq : 0) + 1 };
-    browseEl.className = 'open'; browseEl.innerHTML = '';
+    openChooser(); browseEl.innerHTML = '';
     browseHead(sc.n);
     const d = document.createElement('div'); d.className = 'empty';
     d.textContent = sc.o ? `Streams on: ${sc.o}${sc.o === 'YouTube' ? ' (channel not in the directory)' : ''}.` : 'No stream source known.';
@@ -1766,7 +1796,7 @@
       : HANDLE.test(handle || '') ? `https://www.youtube.com/${handle}` : '';
     const seq = (browseState ? browseState.seq : 0) + 1;
     browseState = { seq, yt: { cid, handle, name, kind } };
-    browseEl.className = 'open'; browseEl.innerHTML = '';
+    openChooser(); browseEl.innerHTML = '';
     browseHead(`${name} — YouTube`);
     if (!base) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No YouTube channel known.'; browseEl.appendChild(d); return; }
     const pageUrl = `${base}/${kind}`;

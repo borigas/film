@@ -6,6 +6,10 @@ Served at **https://film.origas.org/beta/**. It is the main viewer (see `../READ
 
 Every Hudl game list (Browse, a picked school, Union games, `?site=` links) opens with **Sport** set to **Men's Basketball**, for both Live & upcoming and Recent games. Pick **All sports** or another sport in the menu to switch. If a school has no Men's Basketball games, the list says so and shows all sports instead. Men's Basketball also includes games filed under the generic "Basketball" sport (as Mount Marty does), except ones whose title says women's (Women's, Lady, WBB, (W) ...) without also saying men's. Because of that filter, the archived count is shown as "up to N" when it can't be exact. Pick **Basketball** in the menu to see the generic sport on its own.
 
+## Game list folds away
+
+Picking a game from a list (a school's Hudl games, Union games or a YouTube list) folds the list away so the video gets the space. **▾ Games: …** brings it back exactly as it was: same school, tab, sport, search, loaded pages and scroll position. The list's **Close** closes it fully.
+
 ## Panel size
 
 Drag the left edge of the bookmarks/shortcuts panel to resize it (or focus the edge and use the arrow keys; double-click resets). The size is remembered. On narrow screens the panel sits below the video and isn't resizable.
