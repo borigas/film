@@ -1,6 +1,6 @@
 # Game Film Viewer (beta)
 
-Served at **https://film.origas.org/beta/**. It is the main viewer (see `../README.md`) plus the features below. Keyboard shortcuts, bookmarks, Copy link, Cast and the Hudl Browse/search are unchanged. Deep links work here too, e.g. `https://film.origas.org/beta/?src=4679968&t=5000` or `?site=mountmarty`.
+Served at **https://film.origas.org/beta/**. It is the main viewer (see `../README.md`) plus the features below. Keyboard shortcuts, Copy link, Cast and the Hudl Browse/search are unchanged. The bookmarks panel's Export button is replaced by a link icon (see "Sharing bookmarks"). Deep links work here too, e.g. `https://film.origas.org/beta/?src=4679968&t=5000` or `?site=mountmarty`.
 
 ## Men's Basketball first
 
@@ -13,6 +13,12 @@ The header (and the browser tab title) shows the game's date next to its name an
 ## Game list folds away
 
 Picking a game from a list (a school's Hudl games, Union games or a YouTube list) folds the list away so the video gets the space. **▾ Games: …** brings it back exactly as it was: same school, tab, sport, search, loaded pages and scroll position. The list's **Close** closes it fully.
+
+## Sharing bookmarks
+
+The link icon in the bookmarks panel (**Copy link with bookmarks**) copies a link that opens this game with all your bookmarks, times and notes included. The bookmarks travel in the part of the link after `#`, which is never sent to a server. With no bookmarks it copies a plain link to the game at the current time.
+
+Opening such a link shows the bookmarks under **Shared with you (not saved)**, separate from **My bookmarks**. Nothing is saved automatically, so a shared link can never overwrite anyone's own bookmarks. Use the save icon on a shared bookmark to add a copy of it to your bookmarks; it then shows as saved, and saving the same one twice doesn't duplicate it. The shared list stays while that game is loaded (a reload keeps it) and goes away when you load another game. A link with 30 typical bookmarks is about 500 characters.
 
 ## Panel size
 

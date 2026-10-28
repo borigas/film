@@ -156,6 +156,20 @@
   #bmList input:focus { border-color: var(--accent); outline: none; background: var(--panel2); }
   #bmList .del { background: none; border: none; color: var(--muted); padding: 2px 6px; }
   #bmList .del:hover { color: var(--err); }
+  button.icon { padding: 4px 6px; line-height: 0; vertical-align: middle; }
+  button.icon svg { width: 16px; height: 16px; fill: currentColor; }
+  button.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* bookmarks shared through a link: read-only, kept apart from my own */
+  #sharedSection { background: var(--warn-bg); max-height: 35vh; overflow: auto; flex: none; }
+  #sharedSection .nosave { text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--warn); border: 1px solid var(--warn); border-radius: 3px; padding: 0 5px; }
+  #sharedList { list-style: none; margin: 0 0 6px; padding: 0; }
+  #sharedList li { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  #sharedList .t { font-variant-numeric: tabular-nums; color: var(--accent); background: none; border: none; padding: 2px 4px; }
+  #sharedList .snote { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+  #sharedList .save { background: none; border: 1px solid transparent; color: var(--muted); padding: 2px 4px; line-height: 0; }
+  #sharedList .save:hover { color: var(--accent); border-color: var(--accent); }
+  #sharedList .save svg { width: 16px; height: 16px; fill: currentColor; }
+  #sharedList .save.saved { color: var(--accent); cursor: default; border-color: transparent; }
   .empty { color: var(--muted); font-size: 13px; }
   #legend { font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
   kbd { background: var(--panel2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
@@ -243,10 +257,15 @@
          title="Drag to resize the panel (arrow keys too; double-click to reset)"></div>
     <button id="panelToggle" type="button" aria-expanded="true" aria-controls="panelBody" title="Hide panel (B)"><span class="plbl">Hide panel</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></button>
     <div id="panelBody">
+    <section id="sharedSection" hidden aria-label="Bookmarks shared with you, not saved">
+      <h2>Shared with you <span class="nosave">not saved</span></h2>
+      <ul id="sharedList"></ul>
+      <div class="small">Use the save icon to add one to your bookmarks.</div>
+    </section>
     <section id="bmSection">
-      <h2>Bookmarks <span>
+      <h2><span id="bmTitle">Bookmarks</span> <span>
         <button id="addBm" title="Mark current time (M)">+ Mark</button>
-        <button id="exportBm" title="Download bookmarks as text">Export</button>
+        <button id="shareBm" class="icon" type="button" title="Copy link with bookmarks" aria-label="Copy link with bookmarks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/></svg></button>
       </span></h2>
       <ul id="bmList"></ul>
       <div id="bmEmpty" class="empty">Press <kbd>M</kbd> to mark the current time.</div>
@@ -1207,7 +1226,7 @@
       // While casting, t follows the TV.
       const t = Math.floor(CAST.connected && !YTP.on ? remoteTime() : (pendingStart || localTime()));
       if (t > 0) params.set('t', String(t)); else params.delete('t');
-      history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+      history.replaceState(null, '', `${location.pathname}?${params.toString()}${sharedHash}`); // keeps #bm= while shared
     } catch (e) {}
   }
   function shareRef() { return (current && (current.id || current.input || current.url)) || ''; }
@@ -1248,7 +1267,7 @@
 
   // ---------- bookmarks ----------
   function bmKey() { return current ? 'hudl-film-viewer:bookmarks:' + current.key : null; }
-  function loadBookmarks() { const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; renderBookmarks(); }
+  function loadBookmarks() { const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; syncShared(); renderBookmarks(); }
   function saveBookmarks() { const k = bmKey(); if (k) store(k, bookmarks.length ? bookmarks : null); }
   function renderBookmarks(focusIdx) {
     const list = $('bmList');
@@ -1258,6 +1277,7 @@
          <input data-act="note" value="${escapeHtml(b.note || '')}" placeholder="note..." maxlength="300">
          <button class="del" data-act="del" title="Delete">&times;</button></li>`).join('');
     $('bmEmpty').style.display = bookmarks.length ? 'none' : '';
+    renderShared(); // saved marks follow my bookmarks
     updatePanelToggle();
     // A hidden panel can't take focus: leave focus where it is (the Marked flash still confirms).
     if (focusIdx != null && !panelCollapsed) { const inp = list.querySelector(`li[data-i="${focusIdx}"] input`); if (inp) inp.focus(); }
@@ -1286,22 +1306,138 @@
   $('bmList').addEventListener('keydown', (e) => {
     if (e.target.dataset.act === 'note' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); video.focus(); }
   });
-  $('exportBm').addEventListener('click', () => {
-    if (!current || !bookmarks.length) { flash('No bookmarks'); return; }
-    const name = current.title ? `${current.title}${current.date ? ' - ' + fmtDate(current.date) : ''}` : '';
-    const head = `Bookmarks - ${current.id ? 'broadcast ' + current.id : current.yt ? 'YouTube ' + current.yt : current.url}${name ? '\n' + name : ''}\nSource: ${current.input || ''}\n\n`;
-    const body = bookmarks.map((b) => `${fmt(b.t).padStart(8)}  ${b.note || ''}\n          ${shareAny(b.t)}`).join('\n');
-    const text = head + body + '\n';
-    copyText(text);
-    try {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-      a.download = `bookmarks-${current.id || (current.yt ? 'youtube-' + current.yt : 'stream')}.txt`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    } catch (e) {}
-    flash('Exported (also copied)');
+  // ---------- shareable bookmark links (#bm=...) ----------
+  // The fragment never reaches a server. "1." + base64url(deflate-raw(JSON)) when CompressionStream exists,
+  // else "0." + base64url(JSON). JSON: { v: 1, b: [[tenthsOfSecond, note], ...] }.
+  // Shared bookmarks are only shown; nothing is written to localStorage unless the user saves one (one at a time).
+  const SHARE_MAX_BYTES = 65536, SHARE_MAX_ITEMS = 300, SHARE_MAX_NOTE = 300, SHARE_MAX_FRAGMENT = 200000;
+  let shared = null;        // { key, items: [{ t, note }] } for the loaded game
+  let sharedHash = '';      // "#bm=..." kept in the address bar while that game is loaded
+  let sharedPending = null; // decoded at start-up, claimed by the first game that loads
+  function b64urlEncode(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64urlDecode(str) {
+    if (!/^[A-Za-z0-9_-]*$/.test(str)) throw new Error('bad characters');
+    const s = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+  async function pipeBytes(bytes, stream, cap) { // run bytes through a (De)CompressionStream, stopping past cap
+    const out = new Blob([bytes]).stream().pipeThrough(stream).getReader();
+    const chunks = []; let n = 0;
+    for (;;) {
+      const { done, value } = await out.read();
+      if (done) break;
+      n += value.length;
+      if (cap && n > cap) { try { out.cancel(); } catch (e) {} throw new Error('too large'); }
+      chunks.push(value);
+    }
+    const all = new Uint8Array(n); let o = 0;
+    chunks.forEach((c) => { all.set(c, o); o += c.length; });
+    return all;
+  }
+  async function encodeShared(list) {
+    const json = JSON.stringify({ v: 1, b: list.map((b) => [Math.round(b.t * 10), String(b.note || '').slice(0, SHARE_MAX_NOTE)]) });
+    const raw = new TextEncoder().encode(json);
+    if (typeof CompressionStream === 'function') {
+      try { return '1.' + b64urlEncode(await pipeBytes(raw, new CompressionStream('deflate-raw'))); } catch (e) {}
+    }
+    return '0.' + b64urlEncode(raw);
+  }
+  // -> [{ t, note }]; throws on anything malformed (the caller shows a small notice).
+  async function decodeShared(data) {
+    data = String(data || '');
+    if (data.length > SHARE_MAX_FRAGMENT) throw new Error('too long');
+    const m = /^([01])\.([A-Za-z0-9_-]+)$/.exec(data);
+    if (!m) throw new Error('unknown format');
+    let bytes = b64urlDecode(m[2]);
+    if (m[1] === '1') {
+      if (typeof DecompressionStream !== 'function') throw new Error('this browser cannot read compressed links');
+      bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw'), SHARE_MAX_BYTES);
+    } else if (bytes.length > SHARE_MAX_BYTES) throw new Error('too large');
+    const obj = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    if (!obj || obj.v !== 1 || !Array.isArray(obj.b)) throw new Error('unknown format');
+    const items = [];
+    for (const e of obj.b.slice(0, SHARE_MAX_ITEMS)) {
+      if (!Array.isArray(e) || typeof e[0] !== 'number') continue;
+      const t = e[0] / 10;
+      if (!isFinite(t) || t < 0 || t > 864000) continue; // finite, >= 0, under 10 days
+      items.push({ t: Math.round(t * 10) / 10, note: typeof e[1] === 'string' ? e[1].slice(0, SHARE_MAX_NOTE) : '' });
+    }
+    if (!items.length && obj.b.length) throw new Error('no valid bookmarks');
+    return items.sort((a, b) => a.t - b.t);
+  }
+  async function bookmarkShareLink() {
+    if (!current || !CAN_LINK) return null;
+    const base = shareLink(0); // ?src=<game>&t=0
+    if (!base) return null;
+    return base.replace(/&t=0$/, '').replace(/\?t=0&/, '?') + '#bm=' + await encodeShared(bookmarks);
+  }
+  // The link icon: copies a link to this game with all my bookmarks in #bm= (or, with none, a link at the current time).
+  $('shareBm').addEventListener('click', async () => {
+    if (!current) { flash('Load a game first'); return; }
+    let link = null;
+    if (bookmarks.length) { try { link = await bookmarkShareLink(); } catch (e) { link = null; } }
+    const text = link || shareAny(nowTime());
+    if (await copyText(text)) flash(link || CAN_LINK ? 'Link copied' : 'Copied ' + text);
+    else { setStatus('Copy this: ' + text); flash('Copy from the status bar'); try { window.prompt('Copy this:', text); } catch (e) {} }
   });
+  function isSaved(s) { return bookmarks.some((b) => Math.abs(b.t - s.t) < 0.05 && String(b.note || '') === s.note); }
+  function renderShared() {
+    const sec = $('sharedSection'), list = $('sharedList');
+    const on = !!(shared && current && shared.key === current.key && shared.items.length);
+    sec.hidden = !on;
+    $('bmTitle').textContent = on ? 'My bookmarks' : 'Bookmarks';
+    list.textContent = '';
+    if (!on) return;
+    shared.items.forEach((s, i) => {
+      const li = document.createElement('li'); li.dataset.i = String(i);
+      const t = document.createElement('button'); t.className = 't'; t.dataset.act = 'seek'; t.title = 'Seek'; t.textContent = fmt(s.t);
+      const n = document.createElement('span'); n.className = 'snote'; n.textContent = s.note; if (!s.note) { n.textContent = '(no note)'; n.classList.add('empty'); }
+      const sv = document.createElement('button'); sv.className = 'save'; sv.dataset.act = 'save';
+      const done = isSaved(s);
+      sv.classList.toggle('saved', done); sv.disabled = done;
+      sv.title = done ? 'Saved to my bookmarks' : 'Save to my bookmarks'; sv.setAttribute('aria-label', sv.title);
+      sv.innerHTML = done ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>';
+      li.appendChild(t); li.appendChild(n); li.appendChild(sv); list.appendChild(li);
+    });
+  }
+  $('sharedList').addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); const li = e.target.closest('li');
+    if (!btn || !li || !shared) return;
+    const s = shared.items[Number(li.dataset.i)]; if (!s) return;
+    if (btn.dataset.act === 'seek') { seekAbs(s.t); btn.blur(); if (!YTP.on) video.focus(); }
+    else if (btn.dataset.act === 'save') {
+      // Adds a copy to this browser's bookmarks for this game; never replaces or removes any.
+      if (!isSaved(s)) { bookmarks.push({ t: s.t, note: s.note, at: Date.now() }); saveBookmarks(); }
+      renderBookmarks(); flash(`Saved ${fmt(s.t)}`);
+    }
+  });
+  // Called whenever the loaded game changes (from loadBookmarks).
+  function syncShared() {
+    if (sharedPending && current) { shared = { key: current.key, items: sharedPending.items }; sharedHash = sharedPending.hash; sharedPending = null; }
+    else if (shared && (!current || shared.key !== current.key)) {
+      shared = null; sharedHash = ''; // a different game: the shared bookmarks (and the #bm fragment) go away
+      try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    }
+  }
+  async function readSharedFragment() {
+    const m = /^#bm=(.*)$/.exec(location.hash || '');
+    if (!m) return;
+    try { const items = await decodeShared(m[1]); sharedPending = { items, hash: '#bm=' + m[1] }; }
+    catch (e) { sharedPending = null; sharedError = (e && e.message) || 'malformed'; }
+  }
+  let sharedError = '';
+  function showSharedError() {
+    if (!sharedError) return;
+    showNotice(`<strong>The shared bookmarks in this link couldn't be read</strong> (${escapeHtml(sharedError)}). The game loaded without them.`, false);
+    sharedError = '';
+  }
 
   // ---------- collapsible panel ----------
   function updatePanelToggle() {
@@ -2494,7 +2630,14 @@
   if (qs.get('site')) openBrowse(qs.get('site'));
   if (qs.get('src')) {
     srcInput.value = qs.get('src');
-    loadFromInput(qs.get('src'), Number(qs.get('t')) || 0);
+    // Decode any shared bookmarks (#bm=) first so they attach to this game.
+    readSharedFragment().then(() => {
+      const p = loadFromInput(qs.get('src'), Number(qs.get('t')) || 0);
+      if (sharedError) { // keep the game's own notices; show ours once loading has settled
+        const keep = sharedError;
+        Promise.resolve(p).then(() => { if (!noticeEl.innerHTML) { sharedError = keep; showSharedError(); } });
+      }
+    });
   }
   try { loadCastSdk(); } catch (e) { castDiag.reason = 'loadCastSdk threw: ' + ((e && e.message) || e); castUnavailable('sdk'); }
 })();
