@@ -106,7 +106,12 @@ Older (legacy) games are cast from their H.264 variant stream, because Hudl's le
 
 ## Beta
 
-**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently matches the main site apart from that label. Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
+**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently differs from the main site in two ways:
+
+- **Touch gestures** (phones and tablets): double-tap the left or right side of the video to go back or forward 10 s (each further quick tap adds another 10 s), double-tap the middle for full screen, and press and hold to play at 2× until you let go (holding does nothing while paused). The bottom of the video is left to the player's own controls. On YouTube videos the gestures start once the video is playing, and a single tap there plays or pauses.
+- **No upcoming games in lists:** Hudl lists show only games that are live now (under **Live now**) and recent games, since scheduled games have no video yet. YouTube lists also hide scheduled streams and premieres; live ones still show.
+
+Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
 
 ## Shortcuts
 

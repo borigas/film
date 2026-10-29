@@ -130,6 +130,13 @@
     font-variant-numeric: tabular-nums; font-size: 13px; pointer-events: none; transition: opacity .3s; }
   #flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--overlay); color: var(--overlay-text);
     padding: 10px 16px; border-radius: 8px; font-size: 18px; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  /* touch gestures: double tap a side to skip 10s, hold to play at 2x (no double-tap zoom or long-press callout here) */
+  #videoWrap { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #tapPad { position: absolute; background: transparent; touch-action: manipulation; } /* over the YouTube iframe, above its control bar */
+  .tapfb { position: absolute; top: 50%; transform: translateY(-50%); background: var(--overlay); color: var(--overlay-text); padding: 8px 14px;
+    border-radius: 18px; font-size: 16px; font-variant-numeric: tabular-nums; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  #tapL { left: 8%; } #tapR { right: 8%; }
+  #holdTag { top: 10px; left: 50%; transform: translateX(-50%); }
   #bar { display: flex; gap: 8px; align-items: center; padding: 6px 16px; background: var(--panel); border-top: 1px solid var(--border);
     flex-wrap: wrap; font-size: 13px; }
   #bar .spacer { flex: 1; }
@@ -251,9 +258,11 @@
   <div id="stage">
     <div id="videoWrap">
       <video id="video" controls playsinline preload="auto"></video>
+      <div id="tapPad" hidden></div>
       <div id="osd">1.00x</div>
       <div id="castOverlay" hidden><div class="cdev"></div><div class="cstate"></div></div>
       <div id="flash"></div>
+      <div id="tapL" class="tapfb"></div><div id="tapR" class="tapfb"></div><div id="holdTag" class="tapfb">2&times;</div>
     </div>
     <div id="bar">
       <span id="status">Paste a game link and press Load, or browse a school's games.</span>
@@ -573,7 +582,7 @@
                  failed: false };
   // YouTube mode: on = a YouTube video replaces the <video>; ready = the IFrame player answered onReady.
   // stepT/stepAt = target of the last frame step (getCurrentTime lags right after a seek).
-  const YTP = { on: false, player: null, ready: false, id: '', ticker: 0, apiPromise: null, stepT: 0, stepAt: 0, rates: null };
+  const YTP = { on: false, player: null, ready: false, started: false, id: '', ticker: 0, apiPromise: null, stepT: 0, stepAt: 0, rates: null };
   let titleHint = null; // { key, title, sub } for a YouTube video picked from a list
 
   // ---------- utils ----------
@@ -888,9 +897,10 @@
     if (!YTP.on && !YTP.player && !$('ytHost')) return;
     clearInterval(YTP.ticker);
     const p = YTP.player;
-    YTP.on = false; YTP.player = null; YTP.ready = false; YTP.id = ''; YTP.rates = null; YTP.stepAt = 0;
+    YTP.on = false; YTP.player = null; YTP.ready = false; YTP.started = false; YTP.id = ''; YTP.rates = null; YTP.stepAt = 0;
     if (p) { try { p.destroy(); } catch (e) {} }
     const host = $('ytHost'); if (host) host.remove();
+    padSync();
     video.hidden = false;
     $('qualityLbl').hidden = false;
     syncSpeedSel(video.playbackRate || 1);
@@ -939,7 +949,7 @@
                 title: hint ? hint.title : '', school: hint ? hint.school : '', when: hint ? hint.when : '', whenAt: hint ? hint.at : 0 };
     current.dateLabel = ytDateLabel(current);
     pendingStart = Math.max(0, Number(startAt) || 0);
-    YTP.on = true; YTP.id = id; YTP.ready = false;
+    YTP.on = true; YTP.id = id; YTP.ready = false; YTP.started = false;
     video.hidden = true;
     $('qualityLbl').hidden = true;
     siteInput.value = ''; // a YouTube video has no Hudl site
@@ -983,6 +993,7 @@
           onStateChange: (e) => {
             if (YTP.player !== player) return;
             const st = Number(e && e.data);
+            if (st === 1 && !YTP.started) { YTP.started = true; padSync(); } // touch gestures take over from here
             if (st === 1 && pendingStart && Math.abs(ytTime() - pendingStart) < 15) pendingStart = 0;
             if (st === 1 && YTP.ready && statusEl.className) ytStatus();
             if (st === 2 || st === 0) updateUrl(true);
@@ -1716,7 +1727,7 @@
     st.sections = new Map(SEED_SECTIONS); st.genericIds = new Set(GENERIC_BASKETBALL); st.rKey = ''; st.rSeq = 0; st.timer = 0; st.nSeq = 0; st.normalSection = null;
     const df = { section: DEFAULT_SECTION };
     const [live, past, all] = await Promise.allSettled([
-      jsonp(bUrl(st, 3, 'asc', 1, df), 15000),
+      jsonp(bUrl(st, 2, 'asc', 1, df), 15000),
       jsonp(bUrl(st, 4, 'desc', 1, df), 15000),
       jsonp(bUrl(st, 4, 'desc', 1, null, 100), 15000),
     ]);
@@ -1775,7 +1786,8 @@
     st.bar.querySelector('[data-f="section"]').value = id;
     st.rKey = JSON.stringify(readFilters(st));
   }
-  // The default (non-search) view: live & upcoming plus recent games, both for one sport ('' = all sports).
+  // The default (non-search) view: live games plus recent ones, both for one sport ('' = all sports). Scheduled games
+  // are left out: they have no video yet. viewer_status 2 = live now (status "Streaming"), 1 = upcoming, 3 = both, 4 = archived.
   async function loadNormal(st, section, opts) {
     opts = opts || {};
     const seq = ++st.nSeq;
@@ -1783,7 +1795,7 @@
     st.normal.innerHTML = '';
     const ld = document.createElement('div'); ld.className = 'empty'; ld.textContent = 'Loading games...'; st.normal.appendChild(ld);
     const f = section ? { section } : null;
-    const [live, past] = await Promise.allSettled([jsonp(bUrl(st, 3, 'asc', 1, f), 15000), jsonp(bUrl(st, 4, 'desc', 1, f), 15000)]);
+    const [live, past] = await Promise.allSettled([jsonp(bUrl(st, 2, 'asc', 1, f), 15000), jsonp(bUrl(st, 4, 'desc', 1, f), 15000)]);
     if (browseState !== st || st.nSeq !== seq) return;
     if (live.status === 'rejected' && past.status === 'rejected') {
       st.normalSection = null; // a later change of sport (or picking it again) retries
@@ -1801,7 +1813,7 @@
     st.normal.innerHTML = ''; st.page = 1;
     addSections(st, liveRaw.concat(pastRaw));
     const keep = (b) => keepGame(st, section, b);
-    const liveList = liveRaw.filter(keep), pastList = pastRaw.filter(keep);
+    const liveList = liveRaw.filter((b) => keep(b) && !/upcoming/i.test(b.status)), pastList = pastRaw.filter(keep);
     const stat = document.createElement('div'); stat.className = 'bstat';
     if (note) { const s = document.createElement('strong'); s.textContent = note; stat.appendChild(s); }
     else if (section && (liveList.length || pastList.length)) {
@@ -1823,7 +1835,7 @@
       st.normal.appendChild(d); return;
     }
     if (liveList.length) {
-      const h3 = document.createElement('h3'); h3.textContent = 'Live & upcoming'; st.normal.appendChild(h3);
+      const h3 = document.createElement('h3'); h3.textContent = 'Live now'; st.normal.appendChild(h3);
       const ul = document.createElement('ul'); ul.className = 'games';
       liveList.forEach((b) => ul.appendChild(gameItem(b, slug))); st.normal.appendChild(ul);
     }
@@ -1891,7 +1903,7 @@
     if (key === st.rKey && !force) return;
     st.rKey = key;
     const seq = ++st.rSeq;
-    // Sport alone isn't a search: it re-filters the normal view (live & upcoming + recent games).
+    // Sport alone isn't a search: it re-filters the normal view (live + recent games).
     const active = !!(f.q || f.from || f.to);
     st.bar.querySelector('[data-act="clear"]').hidden = !active;
     st.results.innerHTML = '';
@@ -2159,7 +2171,7 @@
     const sub = document.createElement('div'); sub.className = 'gsub';
     const badge = document.createElement('span');
     badge.className = 'badge' + (v.live ? ' live' : '');
-    badge.textContent = v.live ? 'LIVE' : v.upcoming ? 'Upcoming' : (v.duration || 'YouTube');
+    badge.textContent = v.live ? 'LIVE' : (v.duration || 'YouTube');
     sub.appendChild(badge);
     if (v.when) sub.appendChild(document.createTextNode(' ' + v.when));
     t.appendChild(n); t.appendChild(sub); btn.appendChild(t); li.appendChild(btn);
@@ -2189,7 +2201,7 @@
     const stat = document.createElement('div'); stat.className = 'bstat'; stat.setAttribute('role', 'status');
     stat.textContent = 'Loading recent videos from YouTube...';
     browseEl.appendChild(stat);
-    let list = null, err = '';
+    let list = null, err = '', scheduled = 0;
     try {
       let r = await jsonp(`${HUDL}/api/viewer/app/rss?url=${encodeURIComponent(pageUrl)}`, 30000);
       let html = r && r.success === true && typeof r.contents === 'string' ? r.contents : '';
@@ -2197,7 +2209,9 @@
       if (!html) throw new Error(`YouTube didn't return the channel page${status ? ' (HTTP ' + status + ')' : ''}`);
       const data = YtParse.initialData(html); html = '';
       if (!data) throw new Error('could not read YouTube\'s page (its format may have changed)');
-      list = YtParse.videos(data);
+      const all = YtParse.videos(data);
+      list = all.filter((v) => v.live || !v.upcoming); // scheduled streams / premieres have no video yet
+      scheduled = all.length - list.length;
     } catch (e) { err = (e && e.message) || String(e); }
     if (!browseState || browseState.seq !== seq) return;
     const what = kind === 'streams' ? 'live streams' : 'videos';
@@ -2208,11 +2222,11 @@
       return;
     }
     if (!list.length) {
-      stat.textContent = `No ${what} found on this channel. `;
+      stat.textContent = `No ${what} found on this channel${scheduled ? ` (${scheduled} scheduled, not streamed yet)` : ''}. `;
       stat.appendChild(ytLink(pageUrl, 'Open the channel on YouTube'));
       return;
     }
-    stat.textContent = `${list.length} most recent ${what} (YouTube only shows about 30 here; older ones are on the channel page).`;
+    stat.textContent = `${list.length} most recent ${what}${scheduled ? ` (${scheduled} scheduled ones hidden until they go live)` : ''}. YouTube only shows about 30 here; older ones are on the channel page.`;
     const ul = document.createElement('ul'); ul.className = 'games';
     list.forEach((v) => ul.appendChild(ytItem(v, name)));
     browseEl.appendChild(ul);
@@ -2401,14 +2415,115 @@
       case k === 'm' || k === 'M': addBookmark(); break;
       case k === 'b' || k === 'B': setPanel(!panelCollapsed, true); break;
       case k === '/': openFinder(true); break;
-      case k === 'f' || k === 'F':
-        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-        else if ($('videoWrap').requestFullscreen) $('videoWrap').requestFullscreen().catch(() => {});
-        break;
+      case k === 'f' || k === 'F': toggleFullscreen(); break;
       default: handled = false;
     }
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   }, true);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if ($('videoWrap').requestFullscreen) $('videoWrap').requestFullscreen().catch(() => {});
+  }
+
+  // ---------- touch gestures (phones / tablets) ----------
+  // Double tap the left / right 40% of the picture to go back / forward 10s (each further quick tap adds 10s), the middle
+  // for full screen; hold ~0.4s to play at 2x until released. Touch only, and never on the bottom 48px (control bar).
+  // The <video> keeps its own single-tap behaviour. YouTube's iframe swallows touches, so once it has played, #tapPad
+  // (over the picture, not its control bar) takes them on touch devices, and a single tap there plays / pauses.
+  const wrapEl = $('videoWrap'), tapPad = $('tapPad'), holdTag = $('holdTag'), tapFb = { L: $('tapL'), R: $('tapR') };
+  const TAP = { id: null, x: 0, y: 0, downAt: 0, zone: '', moved: false, holdTimer: 0, hold: null, consume: false,
+                lastUp: 0, lastZone: '', streak: 0, streakZone: '', singleTimer: 0, touchAt: 0, fbTimer: 0 };
+  // Where a point falls on the picture: 'L', 'M', 'R', or '' (outside it, or on the control bar).
+  function tapZone(x, y) {
+    const el = YTP.on ? $('ytHost') : video, r = el && el.getBoundingClientRect();
+    if (!r || !r.width || x < r.left || x > r.right || y < r.top || y > r.bottom - 48) return '';
+    const f = (x - r.left) / r.width;
+    return f < 0.4 ? 'L' : f > 0.6 ? 'R' : 'M';
+  }
+  function padSync() {
+    let host = null;
+    try { if (YTP.on && YTP.started && matchMedia('(pointer: coarse)').matches) host = $('ytHost'); } catch (e) {}
+    const pad = $('tapPad');
+    if (host) {
+      pad.style.left = host.offsetLeft + 'px'; pad.style.top = host.offsetTop + 'px';
+      pad.style.width = host.offsetWidth + 'px'; pad.style.height = Math.max(0, host.offsetHeight - 48) + 'px';
+    }
+    pad.hidden = !host;
+  }
+  if (window.ResizeObserver) new ResizeObserver(padSync).observe(wrapEl);
+  window.addEventListener('resize', padSync);
+  function showTapFb(zone, secs) {
+    const el = tapFb[zone];
+    el.textContent = zone === 'L' ? `« ${secs}s` : `${secs}s »`;
+    el.style.opacity = 1; tapFb[zone === 'L' ? 'R' : 'L'].style.opacity = 0;
+    clearTimeout(TAP.fbTimer); TAP.fbTimer = setTimeout(() => (el.style.opacity = 0), 700);
+  }
+  function holdStart() { // 2x while held; only when playing locally (not paused, not casting)
+    TAP.holdTimer = 0;
+    if (!current || CAST.connected || (YTP.on && !YTP.ready) || !isPlaying()) return;
+    clearTimeout(TAP.singleTimer); TAP.singleTimer = 0;
+    TAP.hold = { key: current.key, rate: curRate() };
+    applyRate(2); holdTag.style.opacity = 1;
+  }
+  function holdEnd() {
+    clearTimeout(TAP.holdTimer); TAP.holdTimer = 0;
+    const h = TAP.hold; if (!h) return;
+    TAP.hold = null; holdTag.style.opacity = 0;
+    if (current && current.key === h.key && !CAST.connected) applyRate(h.rate);
+  }
+  function skipTap(zone) {
+    TAP.consume = true;
+    if (!seekBy(zone === 'L' ? -10 : 10)) { TAP.streak = 0; return; } // seekBy flashed why
+    TAP.streak++; TAP.streakZone = zone;
+    showTapFb(zone, TAP.streak * 10);
+  }
+  function onTap(zone, onPad) {
+    const now = Date.now(), quick = now - TAP.lastUp < 300;
+    const more = TAP.streak && zone === TAP.streakZone && now - TAP.lastUp < 700; // tap-tap-tap: another 10s
+    TAP.lastUp = now;
+    if (more) { skipTap(zone); return; }
+    TAP.streak = 0;
+    if (quick && zone === TAP.lastZone) { // the second tap of a double tap
+      clearTimeout(TAP.singleTimer); TAP.singleTimer = 0; TAP.lastZone = '';
+      if (zone === 'M') { TAP.consume = true; toggleFullscreen(); } else skipTap(zone);
+      return;
+    }
+    TAP.lastZone = zone;
+    if (onPad) { clearTimeout(TAP.singleTimer); TAP.singleTimer = setTimeout(() => { TAP.singleTimer = 0; togglePlay(); }, 300); }
+  }
+  wrapEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    TAP.touchAt = Date.now();
+    if (!e.isPrimary || TAP.id != null) { holdEnd(); TAP.id = null; return; } // a second finger (pinch): no gesture
+    const zone = current ? tapZone(e.clientX, e.clientY) : '';
+    if (!zone) return;
+    TAP.id = e.pointerId; TAP.x = e.clientX; TAP.y = e.clientY; TAP.downAt = Date.now(); TAP.zone = zone;
+    TAP.moved = false; TAP.consume = false;
+    TAP.holdTimer = setTimeout(holdStart, 400);
+  });
+  wrapEl.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== TAP.id || TAP.moved) return;
+    if (Math.abs(e.clientX - TAP.x) > 10 || Math.abs(e.clientY - TAP.y) > 10) {
+      TAP.moved = true;
+      if (!TAP.hold) { clearTimeout(TAP.holdTimer); TAP.holdTimer = 0; }
+    }
+  });
+  wrapEl.addEventListener('pointerup', (e) => {
+    if (e.pointerId !== TAP.id) return;
+    TAP.id = null;
+    if (TAP.hold) { holdEnd(); TAP.consume = true; return; }
+    clearTimeout(TAP.holdTimer); TAP.holdTimer = 0;
+    if (!TAP.moved && Date.now() - TAP.downAt < 400) onTap(TAP.zone, e.target === tapPad);
+  });
+  wrapEl.addEventListener('pointercancel', (e) => { if (e.pointerId === TAP.id) { holdEnd(); TAP.id = null; } }); // e.g. the page scrolled
+  // A consumed touch (double tap, hold) makes no click, so the <video> doesn't also react; taps on the pad never do.
+  wrapEl.addEventListener('touchend', (e) => {
+    if ((TAP.consume || e.target === tapPad) && e.cancelable) e.preventDefault();
+    TAP.consume = false;
+  }, { passive: false });
+  wrapEl.addEventListener('contextmenu', (e) => { if (TAP.id != null || TAP.hold) e.preventDefault(); }); // long press
+  tapPad.addEventListener('click', () => { if (Date.now() - TAP.touchAt > 1000) togglePlay(); }); // a mouse on a touch device
 
   // ---------- cast: what to send the TV (pure; no DOM or Cast SDK use) ----------
   /* CAST-PLAN-BEGIN */

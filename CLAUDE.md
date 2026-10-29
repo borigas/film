@@ -37,7 +37,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - Its variant playlists and segments are on CloudFront, which sends `Access-Control-Allow-Origin: *`; Hudl's other CDN URLs do too. Casting a legacy game sends the TV the H.264 variant URL directly.
 - **hls.js** keeps only `avc1` levels (`restrictToAvc`), so HEVC variants are hidden. Safari uses native HLS if MediaSource is missing.
 - **Listing and search:** `https://vcloud.hudl.com/api/viewer/broadcast` (JSONP).
-  - Params: `sites=a,b,c` (comma list; slugs are case-insensitive, but responses keep the site's own case, e.g. `NebWesleyan`), `viewer_status=3` (live/upcoming, sort asc) or `4` (archived, sort desc), `sort_by=date`, `sort_dir`, `per_page` (30; 100 for the sport-menu sample), `page`, `title` (every word must appear), `section_id`, `after` / `before` (ISO instants).
+  - Params: `sites=a,b,c` (comma list; slugs are case-insensitive, but responses keep the site's own case, e.g. `NebWesleyan`), `viewer_status` (`2` = live now, `status` "Streaming"; `1` = upcoming, `status` "Upcoming"; `3` = both; `4` = archived; checked against real responses Oct 2026). Beta's default list uses `2` (sort asc) for **Live now** plus `4` (sort desc) for recent games; upcoming games are never listed (no video yet), and `renderNormal` also drops any `status` matching /upcoming/. Main still uses `3` until promoted. Other params: `sort_by=date`, `sort_dir`, `per_page` (30; 100 for the sport-menu sample), `page`, `title` (every word must appear), `section_id`, `after` / `before` (ISO instants).
   - Response: `broadcasts[]`, `item_count`, `num_pages`.
   - **Section ids are global** (`api/viewer/section` lists them with `site: null`): 45 Men's Basketball, 46 Women's Basketball, 1 generic Basketball (also 4900 Boys, 4901 Girls).
   - `section_id=45,1` (comma list) returns one date-sorted, correctly paged result across both. A repeated `section_id=` keeps only the last value. `id=` is ignored.
@@ -48,6 +48,11 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - `onError` codes handled: 2, 5, 100, 101, 150 and 153. 153 is the missing referrer, which always happens on `file://`.
   - Channel lists come from `https://www.youtube.com/channel/<UC…>/streams` or `/videos`, fetched through the proxy (about 1.3 MB). `ytInitialData` is cut out (`var ytInitialData = ` … `;</script>`), `JSON.parse`d, and walked for `lockupViewModel`, `videoRenderer` and `gridVideoRenderer`. That gives about 30 videos.
   - YouTube RSS feeds return 404 for every channel, so they aren't used.
+- **Touch gestures** (beta; the "touch gestures" block just before CastPlan): pointer events on `#videoWrap`, `pointerType === 'touch'` only, so mouse behaviour is unchanged.
+  - Double-tapping the left or right 40% calls `seekBy(∓10)` (the J/K path); further taps within 700 ms add 10 s each. Double-tapping the middle calls `toggleFullscreen()` (shared with F). Holding for 400 ms with less than 10 px of movement calls `applyRate(2)`, and release or pointercancel restores the previous rate. Hold is ignored while paused or casting. The bottom 48 px of the player is ignored.
+  - Consumed touches `preventDefault` their `touchend`, so the native `<video>` doesn't also react; single taps are untouched.
+  - YouTube: the iframe swallows touches, so `#tapPad` (transparent, positioned over the iframe minus its bottom 48 px by `padSync()`) takes them. It is shown only when the primary pointer is coarse (`matchMedia('(pointer: coarse)')`) and after the video first plays (`YTP.started`), so YouTube's own play button gets the first tap. A single tap on the pad toggles play after 300 ms.
+- YouTube channel lists drop `upcoming` items (scheduled streams and premieres) unless they're `live`; the count line says how many were hidden.
 - **Cast:** Google Cast Web Sender with the Default Media Receiver. Only Hudl HLS is cast; on YouTube the button is hidden and an active session is ended. `CastPlan` chooses the URL and the HLS segment format.
 - **Storage keys** (all access goes through try/catch helpers):
   - localStorage:
@@ -117,6 +122,11 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 
 - **Undocumented endpoints:** the Hudl proxy, the listing, site and VMAP endpoints, and YouTube channel-page parsing. If YouTube's page shape changes, `YtParse.videos` stops finding videos and the list shows a link to the channel instead.
 - **Never tested:** casting to a real Chromecast, Safari (native-HLS path, iOS), live games (DVR window, live casting), and `file://` beyond the basics (YouTube can't play there; Cast usually isn't offered).
+- **Touch gestures were tested only with synthetic PointerEvents and TouchEvents** (desktop Chrome, mobile emulation), never on a real phone or tablet. Untested:
+  - whether Chrome Android's native video controls have their own double-tap seek, and whether cancelling the `touchend` suppresses it;
+  - the iOS long-press callout and Safari's handling of hold;
+  - full screen on iPhone (there's no element `requestFullscreen`, so the middle double tap does nothing);
+  - whether the YouTube iframe obeys `playVideo` from a pad tap on real mobile browsers.
 - **Browser automation can't take screenshots here.** UI checks so far have been done through DOM and JS measurements.
 
 ## Owner preferences learned so far
