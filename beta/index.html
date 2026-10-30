@@ -12,6 +12,7 @@
     --bg: #eef0f3; --panel: #ffffff; --panel2: #f3f5f8; --border: #d5d9e0;
     --text: #15181d; --muted: #5b6472; --accent: #1f6fe0; --accent-text: #ffffff;
     --warn: #9a5b00; --warn-bg: #fff5e0; --err: #c62828; --live: #d32f2f;
+    --off: #2e7d32; --def: #7b1fa2;
     --stage: #000000; --overlay: rgba(0,0,0,.65); --overlay-text: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
@@ -20,6 +21,7 @@
       --bg: #0e1013; --panel: #171a1f; --panel2: #1e222a; --border: #2a2f39;
       --text: #e6e8eb; --muted: #8b93a1; --accent: #4f9cff; --accent-text: #ffffff;
       --warn: #ffb347; --warn-bg: #2a2416; --err: #ff6b6b; --live: #ff5252;
+      --off: #3f9b45; --def: #9c4dcc;
     }
   }
   :root[data-theme="dark"] {
@@ -27,6 +29,7 @@
     --bg: #0e1013; --panel: #171a1f; --panel2: #1e222a; --border: #2a2f39;
     --text: #e6e8eb; --muted: #8b93a1; --accent: #4f9cff; --accent-text: #ffffff;
     --warn: #ffb347; --warn-bg: #2a2416; --err: #ff6b6b; --live: #ff5252;
+    --off: #3f9b45; --def: #9c4dcc;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
@@ -176,6 +179,18 @@
   #bmList input:focus { border-color: var(--accent); outline: none; background: var(--panel2); }
   #bmList .del { background: none; border: none; color: var(--muted); padding: 2px 6px; }
   #bmList .del:hover { color: var(--err); }
+  /* reorder: drag the grip (mouse or touch), or focus it and press Up / Down */
+  #bmList .grip { background: none; border: none; color: var(--muted); padding: 2px 0; line-height: 0; cursor: grab; touch-action: none; flex: none; }
+  #bmList .grip svg { width: 12px; height: 16px; fill: currentColor; }
+  #bmList .grip:hover { color: var(--text); }
+  #bmList .grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #bmList li.dragging { background: var(--panel2); opacity: .75; }
+  #bmList.dragging, #bmList.dragging .grip { cursor: grabbing; user-select: none; }
+  /* offense / defense tag */
+  .bmtag { flex: none; width: 24px; padding: 2px 0; border-radius: 4px; text-align: center; font-size: 11px; font-weight: 600; line-height: 16px; }
+  button.bmtag { background: none; border: 1px dashed var(--border); color: var(--muted); }
+  .bmtag.o { background: var(--off); border: 1px solid var(--off); color: #fff; }
+  .bmtag.d { background: var(--def); border: 1px solid var(--def); color: #fff; }
   button.icon { padding: 4px 6px; line-height: 0; vertical-align: middle; }
   button.icon svg { width: 16px; height: 16px; fill: currentColor; }
   button.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -287,6 +302,7 @@
     <section id="bmSection">
       <h2><span id="bmTitle">Bookmarks</span> <span>
         <button id="addBm" title="Mark current time (M)">+ Mark</button>
+        <button id="sortBm" class="icon" type="button" hidden title="Sort by time" aria-label="Sort bookmarks by time"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg></button>
         <button id="shareBm" class="icon" type="button" title="Copy link with bookmarks" aria-label="Copy link with bookmarks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/></svg></button>
       </span></h2>
       <ul id="bmList"></ul>
@@ -1354,34 +1370,62 @@
   function bmKey() { return current ? 'hudl-film-viewer:bookmarks:' + current.key : null; }
   function loadBookmarks() { const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; syncShared(); renderBookmarks(); }
   function saveBookmarks() { const k = bmKey(); if (k) store(k, bookmarks.length ? bookmarks : null); }
-  function renderBookmarks(focusIdx) {
+  // The list keeps the order I give it (drag, or Up / Down on the grip); a new mark goes in by time.
+  // Each bookmark may carry tag 'o' (offense) or 'd' (defense).
+  const TAGS = { o: ['O', 'Offense'], d: ['D', 'Defense'] };
+  const GRIP_SVG = '<svg viewBox="0 0 12 16" aria-hidden="true"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>';
+  function tagOf(b) { return b && Object.prototype.hasOwnProperty.call(TAGS, b.tag) ? b.tag : ''; }
+  function renderBookmarks(focusIdx, focusAct) {
     const list = $('bmList');
-    bookmarks.sort((a, b) => a.t - b.t);
-    list.innerHTML = bookmarks.map((b, i) =>
-      `<li data-i="${i}"><button class="t" data-act="seek" title="Seek">${fmt(b.t)}</button>
+    list.innerHTML = bookmarks.map((b, i) => {
+      const g = tagOf(b);
+      const tagTitle = g ? `${TAGS[g][1]} (click to change)` : 'Tag as offense or defense';
+      return `<li data-i="${i}"><button class="grip" data-act="grip" title="Drag to reorder (or Up / Down)" aria-label="Move bookmark ${fmt(b.t)}">${GRIP_SVG}</button>
+         <button class="t" data-act="seek" title="Seek">${fmt(b.t)}</button>
+         <button class="bmtag${g ? ' ' + g : ''}" data-act="tag" title="${tagTitle}" aria-label="${tagTitle}">${g ? TAGS[g][0] : 'O/D'}</button>
          <input data-act="note" value="${escapeHtml(b.note || '')}" placeholder="note..." maxlength="300">
-         <button class="del" data-act="del" title="Delete">&times;</button></li>`).join('');
+         <button class="del" data-act="del" title="Delete">&times;</button></li>`;
+    }).join('');
     $('bmEmpty').style.display = bookmarks.length ? 'none' : '';
+    $('sortBm').hidden = bookmarks.every((b, i) => !i || bookmarks[i - 1].t <= b.t);
     renderShared(); // saved marks follow my bookmarks
     updatePanelToggle();
     // A hidden panel can't take focus: leave focus where it is (the Marked flash still confirms).
-    if (focusIdx != null && !panelCollapsed) { const inp = list.querySelector(`li[data-i="${focusIdx}"] input`); if (inp) inp.focus(); }
+    if (focusIdx != null && !panelCollapsed) {
+      const el = list.querySelector(`li[data-i="${focusIdx}"] [data-act="${focusAct || 'note'}"]`); if (el) el.focus();
+    }
+  }
+  function insertByTime(b) { // before the first later mark, so a time-ordered list stays ordered
+    const j = bookmarks.findIndex((x) => x.t > b.t);
+    if (j < 0) bookmarks.push(b); else bookmarks.splice(j, 0, b);
   }
   function addBookmark() {
     if (!current) { flash('Load a game first'); return; }
     const b = { t: Math.round(nowTime() * 10) / 10, note: '', at: Date.now() }; // the TV's time while casting
-    bookmarks.push(b);
+    insertByTime(b);
     saveBookmarks();
-    renderBookmarks();
     renderBookmarks(bookmarks.indexOf(b));
     flash(`Marked ${fmt(b.t)}`);
   }
+  function moveBookmark(from, to) {
+    if (to < 0 || to >= bookmarks.length || to === from) return false;
+    bookmarks.splice(to, 0, bookmarks.splice(from, 1)[0]);
+    saveBookmarks();
+    return true;
+  }
   $('addBm').addEventListener('click', addBookmark);
+  $('sortBm').addEventListener('click', () => { bookmarks.sort((a, b) => a.t - b.t); saveBookmarks(); renderBookmarks(); flash('Sorted by time'); });
   $('bmList').addEventListener('click', (e) => {
     const li = e.target.closest('li'); if (!li) return;
-    const i = Number(li.dataset.i), act = e.target.dataset.act;
-    if (act === 'seek') { seekAbs(bookmarks[i].t); if (YTP.on) e.target.blur(); else video.focus(); }
+    const btn = e.target.closest('[data-act]'), act = btn && btn.dataset.act;
+    const i = Number(li.dataset.i);
+    if (act === 'seek') { seekAbs(bookmarks[i].t); if (YTP.on) btn.blur(); else video.focus(); }
     else if (act === 'del') { bookmarks.splice(i, 1); saveBookmarks(); renderBookmarks(); }
+    else if (act === 'tag') { // none -> O -> D -> none
+      const b = bookmarks[i], next = { '': 'o', o: 'd', d: '' }[tagOf(b)];
+      if (next) b.tag = next; else delete b.tag;
+      saveBookmarks(); renderBookmarks(i, 'tag');
+    }
   });
   $('bmList').addEventListener('input', (e) => {
     if (e.target.dataset.act !== 'note') return;
@@ -1389,8 +1433,46 @@
     bookmarks[i].note = e.target.value; saveBookmarks();
   });
   $('bmList').addEventListener('keydown', (e) => {
-    if (e.target.dataset.act === 'note' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); video.focus(); }
+    const act = e.target.dataset.act;
+    if (act === 'note' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); video.focus(); }
+    else if (act === 'grip' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const i = Number(e.target.closest('li').dataset.i), to = i + (e.key === 'ArrowUp' ? -1 : 1);
+      if (moveBookmark(i, to)) renderBookmarks(to, 'grip');
+    }
   });
+  // Drag to reorder: pointer events on the grip, so mouse, pen and touch all work. The row moves live; the new
+  // order is saved on release, and pointercancel puts it back.
+  const BMDRAG = { id: null, li: null, from: -1 };
+  $('bmList').addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('.grip');
+    if (!grip || BMDRAG.li || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault(); // no text selection, no scrolling
+    BMDRAG.id = e.pointerId; BMDRAG.li = grip.closest('li'); BMDRAG.from = Number(BMDRAG.li.dataset.i);
+    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+    BMDRAG.li.classList.add('dragging'); $('bmList').classList.add('dragging');
+  });
+  $('bmList').addEventListener('pointermove', (e) => {
+    if (!BMDRAG.li || e.pointerId !== BMDRAG.id) return;
+    const list = $('bmList'), y = e.clientY;
+    const before = [...list.children].find((li) => {
+      if (li === BMDRAG.li) return false;
+      const r = li.getBoundingClientRect(); return y < r.top + r.height / 2;
+    });
+    if ((before || null) !== BMDRAG.li.nextElementSibling) list.insertBefore(BMDRAG.li, before || null);
+    const sec = $('bmSection'), r = sec.getBoundingClientRect(); // scroll a long list near its edges
+    if (y < r.top + 28) sec.scrollTop -= 10; else if (y > r.bottom - 28) sec.scrollTop += 10;
+  });
+  function endBmDrag(e, keep) {
+    if (!BMDRAG.li || e.pointerId !== BMDRAG.id) return;
+    const to = [...$('bmList').children].indexOf(BMDRAG.li), from = BMDRAG.from;
+    BMDRAG.id = null; BMDRAG.li = null; BMDRAG.from = -1;
+    $('bmList').classList.remove('dragging');
+    if (keep) moveBookmark(from, to);
+    renderBookmarks();
+  }
+  $('bmList').addEventListener('pointerup', (e) => endBmDrag(e, true));
+  $('bmList').addEventListener('pointercancel', (e) => endBmDrag(e, false));
   // ---------- shareable bookmark links (#bm=...) ----------
   // The fragment never reaches a server. "1." + base64url(deflate-raw(JSON)) when CompressionStream exists,
   // else "0." + base64url(JSON). JSON: { v: 1, b: [[tenthsOfSecond, note], ...] }.
@@ -1426,7 +1508,11 @@
     return all;
   }
   async function encodeShared(list) {
-    const json = JSON.stringify({ v: 1, b: list.map((b) => [Math.round(b.t * 10), String(b.note || '').slice(0, SHARE_MAX_NOTE)]) });
+    const json = JSON.stringify({ v: 1, b: list.map((b) => {
+      const e = [Math.round(b.t * 10), String(b.note || '').slice(0, SHARE_MAX_NOTE)];
+      if (tagOf(b)) e.push(b.tag);
+      return e;
+    }) });
     const raw = new TextEncoder().encode(json);
     if (typeof CompressionStream === 'function') {
       try { return '1.' + b64urlEncode(await pipeBytes(raw, new CompressionStream('deflate-raw'))); } catch (e) {}
@@ -1451,10 +1537,12 @@
       if (!Array.isArray(e) || typeof e[0] !== 'number') continue;
       const t = e[0] / 10;
       if (!isFinite(t) || t < 0 || t > 864000) continue; // finite, >= 0, under 10 days
-      items.push({ t: Math.round(t * 10) / 10, note: typeof e[1] === 'string' ? e[1].slice(0, SHARE_MAX_NOTE) : '' });
+      const item = { t: Math.round(t * 10) / 10, note: typeof e[1] === 'string' ? e[1].slice(0, SHARE_MAX_NOTE) : '' };
+      if (e[2] === 'o' || e[2] === 'd') item.tag = e[2];
+      items.push(item);
     }
     if (!items.length && obj.b.length) throw new Error('no valid bookmarks');
-    return items.sort((a, b) => a.t - b.t);
+    return items; // in the sender's order
   }
   async function bookmarkShareLink() {
     if (!current || !CAN_LINK) return null;
@@ -1482,6 +1570,8 @@
     shared.items.forEach((s, i) => {
       const li = document.createElement('li'); li.dataset.i = String(i);
       const t = document.createElement('button'); t.className = 't'; t.dataset.act = 'seek'; t.title = 'Seek'; t.textContent = fmt(s.t);
+      const g = tagOf(s), tg = document.createElement('span');
+      tg.className = 'bmtag' + (g ? ' ' + g : ''); if (g) { tg.textContent = TAGS[g][0]; tg.title = TAGS[g][1]; }
       const n = document.createElement('span'); n.className = 'snote'; n.textContent = s.note; if (!s.note) { n.textContent = '(no note)'; n.classList.add('empty'); }
       const sv = document.createElement('button'); sv.className = 'save'; sv.dataset.act = 'save';
       const done = isSaved(s);
@@ -1489,7 +1579,7 @@
       sv.title = done ? 'Saved to my bookmarks' : 'Save to my bookmarks'; sv.setAttribute('aria-label', sv.title);
       sv.innerHTML = done ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>'
         : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>';
-      li.appendChild(t); li.appendChild(n); li.appendChild(sv); list.appendChild(li);
+      li.appendChild(t); li.appendChild(tg); li.appendChild(n); li.appendChild(sv); list.appendChild(li);
     });
   }
   $('sharedList').addEventListener('click', (e) => {
@@ -1499,7 +1589,7 @@
     if (btn.dataset.act === 'seek') { seekAbs(s.t); btn.blur(); if (!YTP.on) video.focus(); }
     else if (btn.dataset.act === 'save') {
       // Adds a copy to this browser's bookmarks for this game; never replaces or removes any.
-      if (!isSaved(s)) { bookmarks.push({ t: s.t, note: s.note, at: Date.now() }); saveBookmarks(); }
+      if (!isSaved(s)) { const b = { t: s.t, note: s.note, at: Date.now() }; if (s.tag) b.tag = s.tag; insertByTime(b); saveBookmarks(); }
       renderBookmarks(); flash(`Saved ${fmt(s.t)}`);
     }
   });
@@ -2385,6 +2475,7 @@
   window.addEventListener('keydown', (e) => {
     if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target === resizeEl && /^(Arrow(Left|Right)|Home|End|Enter)$/.test(e.key)) return; // the focused handle resizes
+    if (e.target.dataset && e.target.dataset.act === 'grip' && /^Arrow(Up|Down)$/.test(e.key)) return; // moves the bookmark
     const k = e.key;
     let handled = true;
     switch (true) {

@@ -56,7 +56,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 - **Cast:** Google Cast Web Sender with the Default Media Receiver. Only Hudl HLS is cast; on YouTube the button is hidden and an active session is ended. `CastPlan` chooses the URL and the HLS segment format.
 - **Storage keys** (all access goes through try/catch helpers):
   - localStorage:
-    - `hudl-film-viewer:bookmarks:<key>`, where `<key>` is the broadcast ID, `yt:<videoId>` or `url:<m3u8 without query>`; the value is `[{t, note, at}]`;
+    - `hudl-film-viewer:bookmarks:<key>`, where `<key>` is the broadcast ID, `yt:<videoId>` or `url:<m3u8 without query>`; the value is `[{t, note, at, tag?}]` in display order (beta: drag or Up/Down on the grip reorders; `addBookmark` inserts by time; `tag` is `'o'` offense or `'d'` defense, absent for none). Main still sorts by time on render and ignores `tag`, but keeps it;
     - `hudl-film-viewer:lastSite`;
     - `hudl-film-viewer:panelCollapsed`;
     - `hudl-film-viewer:panelWidth`;
@@ -69,7 +69,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - **Resume rule:** on load, the sessionStorage live time is used only if the navigation type is `reload` or `back_forward`, it's the same game, and the URL's `t=` equals `urlT` or `urlFinalT` (what this tab last wrote). Otherwise the URL's `t=` wins. A reload uses the URL from before the unload-time write; back/forward uses the one after it.
   - A same-document `#bm=` change (a share link pasted for the open game) is applied on `hashchange`.
 - **Share links (`#bm=`):**
-  - Encoding: `1.` + base64url(deflate-raw(JSON)) when CompressionStream exists, else `0.` + base64url(JSON). The JSON is `{v:1, b:[[tenthsOfSecond, note], …]}`.
+  - Encoding: `1.` + base64url(deflate-raw(JSON)) when CompressionStream exists, else `0.` + base64url(JSON). The JSON is `{v:1, b:[[tenthsOfSecond, note, tag?], …]}`; the optional third element is `'o'` or `'d'` (beta), and older decoders ignore it. Beta keeps the sender's order; main sorts by time.
   - Decode limits: fragment ≤ 200 KB; decompressed ≤ 64 KB; ≤ 300 bookmarks; notes ≤ 300 characters; times finite, ≥ 0 and ≤ 10 days. Anything malformed shows a small notice.
   - Shared bookmarks are shown in their own section and saved only by an explicit per-item save, which adds and never replaces.
 
