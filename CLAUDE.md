@@ -72,7 +72,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - Encoding: `1.` + base64url(deflate-raw(JSON)) when CompressionStream exists, else `0.` + base64url(JSON). The JSON is `{v:1, b:[[tenthsOfSecond, note, tag?], …]}`; the optional third element is `'o'` or `'d'`, and older decoders ignore it. The decoder keeps the sender's order.
   - Decode limits: fragment ≤ 200 KB; decompressed ≤ 64 KB; ≤ 300 bookmarks; notes ≤ 300 characters; times finite, ≥ 0 and ≤ 10 days. Anything malformed shows a small notice.
   - Shared bookmarks are shown in their own section and saved only by an explicit per-item save, which adds and never replaces.
-  - Shared items that `isSaved` (same time within 0.05 s and same note; the tag is ignored) are left out of the shared list (beta), and `#sharedDup` counts them; the section hides when none are left, and the arrival flash (`sharedSummary`) says how many were already there.
+  - Shared items that `isSaved` (same time within 0.05 s and same note; the tag is ignored) are left out of the shared list, and `#sharedDup` counts them; the section hides when none are left, and the arrival flash (`sharedSummary`) says how many were already there.
 
 ## Hard rules
 
