@@ -1342,16 +1342,16 @@
     if (CAST.connected) return !!(remoteReady() && !CAST.player.isPaused && CAST.player.playerState !== 'IDLE');
     return !video.paused && !video.ended;
   }
-  // Usage counts for watching: 'watch/<game>' the first time a loaded game plays, and one 'watch-time/5min' plus
-  // 'watch-time/<game>' per 5 minutes of playback (wall time while playing, here, on YouTube or on the TV), so
-  // total minutes = count x 5. Leftover time of 2.5 minutes or more is rounded up when the game changes or the page
+  // Usage counts for watching: 'watch/<game>' the first time a loaded game plays, and one 'watch-time/1min' plus
+  // 'watch-time/<game>' per minute of playback (wall time while playing, here, on YouTube or on the TV), so the
+  // count is the minutes watched. Leftover time of 30 s or more is rounded up when the game changes or the page
   // goes away. Background tabs tick slowly, so each tick credits up to 70 s.
   const WATCH = { key: '', game: '', title: '', played: false, ms: 0, last: 0 };
-  const WATCH_STEP = 300000;
+  const WATCH_STEP = 60000;
   function watchGame(c) { return c.yt ? 'youtube/' + c.yt : c.id ? 'hudl/' + c.id : 'stream'; }
   function watchFlush(all) {
     while (WATCH.ms >= WATCH_STEP || (all && WATCH.ms >= WATCH_STEP / 2)) {
-      track('watch-time/5min', '5 minutes watched');
+      track('watch-time/1min', '1 minute watched');
       track('watch-time/' + WATCH.game, WATCH.title);
       WATCH.ms = Math.max(0, WATCH.ms - WATCH_STEP);
     }
