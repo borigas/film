@@ -188,6 +188,13 @@
   #bmList.dragging, #bmList.dragging .grip { cursor: grabbing; user-select: none; }
   /* offense / defense tag */
   .bmtag { flex: none; width: 24px; padding: 2px 0; border-radius: 4px; text-align: center; font-size: 11px; font-weight: 600; line-height: 16px; }
+  /* tag filter: All / O / D (shown once anything is tagged) */
+  #bmFilter { display: flex; gap: 4px; margin: 0 0 6px; }
+  #bmFilter button { padding: 1px 9px; font-size: 12px; border-radius: 12px; color: var(--muted); }
+  #bmFilter button .n { font-variant-numeric: tabular-nums; opacity: .8; }
+  #bmFilter button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  #bmFilter button[data-f="o"][aria-pressed="true"] { background: var(--off); border-color: var(--off); }
+  #bmFilter button[data-f="d"][aria-pressed="true"] { background: var(--def); border-color: var(--def); }
   button.bmtag { background: none; border: 1px dashed var(--border); color: var(--muted); }
   .bmtag.o { background: var(--off); border: 1px solid var(--off); color: #fff; }
   .bmtag.d { background: var(--def); border: 1px solid var(--def); color: #fff; }
@@ -305,7 +312,13 @@
         <button id="sortBm" class="icon" type="button" hidden title="Sort by time" aria-label="Sort bookmarks by time"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg></button>
         <button id="shareBm" class="icon" type="button" title="Copy link with bookmarks" aria-label="Copy link with bookmarks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/></svg></button>
       </span></h2>
+      <div id="bmFilter" role="group" aria-label="Show bookmarks" hidden>
+        <button type="button" data-f="" aria-pressed="true" title="Show all bookmarks">All <span class="n"></span></button>
+        <button type="button" data-f="o" aria-pressed="false" title="Show offense only">Offense <span class="n"></span></button>
+        <button type="button" data-f="d" aria-pressed="false" title="Show defense only">Defense <span class="n"></span></button>
+      </div>
       <ul id="bmList"></ul>
+      <div id="bmNone" class="empty" hidden></div>
       <div id="bmEmpty" class="empty">Press <kbd>M</kbd> to mark the current time.</div>
     </section>
     <section>
@@ -1368,19 +1381,21 @@
 
   // ---------- bookmarks ----------
   function bmKey() { return current ? 'hudl-film-viewer:bookmarks:' + current.key : null; }
-  function loadBookmarks() { const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; syncShared(); renderBookmarks(); }
+  function loadBookmarks() { bmFilter = ''; const k = bmKey(); bookmarks = (k && load(k, [])) || []; if (!Array.isArray(bookmarks)) bookmarks = []; syncShared(); renderBookmarks(); }
   function saveBookmarks() { const k = bmKey(); if (k) store(k, bookmarks.length ? bookmarks : null); }
   // The list keeps the order I give it (drag, or Up / Down on the grip); a new mark goes in by time.
   // Each bookmark may carry tag 'o' (offense) or 'd' (defense).
   const TAGS = { o: ['O', 'Offense'], d: ['D', 'Defense'] };
   const GRIP_SVG = '<svg viewBox="0 0 12 16" aria-hidden="true"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>';
+  let bmFilter = ''; // '' all, else only bookmarks with this tag (mine and shared); reset when a game loads
+  function shownBy(b) { return !bmFilter || tagOf(b) === bmFilter; }
   function tagOf(b) { return b && Object.prototype.hasOwnProperty.call(TAGS, b.tag) ? b.tag : ''; }
   function renderBookmarks(focusIdx, focusAct) {
     const list = $('bmList');
     list.innerHTML = bookmarks.map((b, i) => {
       const g = tagOf(b);
       const tagTitle = g ? `${TAGS[g][1]} (click to change)` : 'Tag as offense or defense';
-      return `<li data-i="${i}"><button class="grip" data-act="grip" title="Drag to reorder (or Up / Down)" aria-label="Move bookmark ${fmt(b.t)}">${GRIP_SVG}</button>
+      return `<li data-i="${i}"${shownBy(b) ? '' : ' hidden'}><button class="grip" data-act="grip" title="Drag to reorder (or Up / Down)" aria-label="Move bookmark ${fmt(b.t)}">${GRIP_SVG}</button>
          <button class="t" data-act="seek" title="Seek">${fmt(b.t)}</button>
          <button class="bmtag${g ? ' ' + g : ''}" data-act="tag" title="${tagTitle}" aria-label="${tagTitle}">${g ? TAGS[g][0] : 'O/D'}</button>
          <input data-act="note" value="${escapeHtml(b.note || '')}" placeholder="note..." maxlength="300">
@@ -1388,6 +1403,7 @@
     }).join('');
     $('bmEmpty').style.display = bookmarks.length ? 'none' : '';
     $('sortBm').hidden = bookmarks.every((b, i) => !i || bookmarks[i - 1].t <= b.t);
+    renderFilter();
     renderShared(); // saved marks follow my bookmarks
     updatePanelToggle();
     // A hidden panel can't take focus: leave focus where it is (the Marked flash still confirms).
@@ -1395,6 +1411,28 @@
       const el = list.querySelector(`li[data-i="${focusIdx}"] [data-act="${focusAct || 'note'}"]`); if (el) el.focus();
     }
   }
+  function renderFilter() {
+    const sharedItems = (shared && current && shared.key === current.key) ? shared.items : [];
+    const any = bookmarks.some(tagOf) || sharedItems.some(tagOf);
+    $('bmFilter').hidden = !any && !bmFilter;
+    const n = { '': bookmarks.length, o: 0, d: 0 };
+    bookmarks.forEach((b) => { const g = tagOf(b); if (g) n[g]++; });
+    $('bmFilter').querySelectorAll('button').forEach((btn) => {
+      const f = btn.dataset.f;
+      btn.setAttribute('aria-pressed', String(f === bmFilter));
+      btn.querySelector('.n').textContent = n[f];
+    });
+    const none = $('bmNone');
+    none.hidden = !(bmFilter && bookmarks.length && !bookmarks.some(shownBy));
+    if (!none.hidden) none.textContent = `No ${TAGS[bmFilter][1].toLowerCase()} bookmarks. Marks added now are tagged ${TAGS[bmFilter][1].toLowerCase()}.`;
+    $('shareBm').title = bmFilter ? `Copy link with ${TAGS[bmFilter][1].toLowerCase()} bookmarks` : 'Copy link with bookmarks';
+    $('shareBm').setAttribute('aria-label', $('shareBm').title);
+  }
+  $('bmFilter').addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    bmFilter = btn.dataset.f || '';
+    renderBookmarks();
+  });
   function insertByTime(b) { // before the first later mark, so a time-ordered list stays ordered
     const j = bookmarks.findIndex((x) => x.t > b.t);
     if (j < 0) bookmarks.push(b); else bookmarks.splice(j, 0, b);
@@ -1402,10 +1440,11 @@
   function addBookmark() {
     if (!current) { flash('Load a game first'); return; }
     const b = { t: Math.round(nowTime() * 10) / 10, note: '', at: Date.now() }; // the TV's time while casting
+    if (bmFilter) b.tag = bmFilter; // so it stays in view
     insertByTime(b);
     saveBookmarks();
     renderBookmarks(bookmarks.indexOf(b));
-    flash(`Marked ${fmt(b.t)}`);
+    flash(`Marked ${fmt(b.t)}` + (bmFilter ? ` (${TAGS[bmFilter][1].toLowerCase()})` : ''));
   }
   function moveBookmark(from, to) {
     if (to < 0 || to >= bookmarks.length || to === from) return false;
@@ -1437,7 +1476,9 @@
     if (act === 'note' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); video.focus(); }
     else if (act === 'grip' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
-      const i = Number(e.target.closest('li').dataset.i), to = i + (e.key === 'ArrowUp' ? -1 : 1);
+      const i = Number(e.target.closest('li').dataset.i), step = e.key === 'ArrowUp' ? -1 : 1;
+      let to = i + step;
+      while (to >= 0 && to < bookmarks.length && !shownBy(bookmarks[to])) to += step; // past rows the filter hides
       if (moveBookmark(i, to)) renderBookmarks(to, 'grip');
     }
   });
@@ -1456,7 +1497,7 @@
     if (!BMDRAG.li || e.pointerId !== BMDRAG.id) return;
     const list = $('bmList'), y = e.clientY;
     const before = [...list.children].find((li) => {
-      if (li === BMDRAG.li) return false;
+      if (li === BMDRAG.li || li.hidden) return false;
       const r = li.getBoundingClientRect(); return y < r.top + r.height / 2;
     });
     if ((before || null) !== BMDRAG.li.nextElementSibling) list.insertBefore(BMDRAG.li, before || null);
@@ -1544,19 +1585,21 @@
     if (!items.length && obj.b.length) throw new Error('no valid bookmarks');
     return items; // in the sender's order
   }
-  async function bookmarkShareLink() {
+  async function bookmarkShareLink(list) {
     if (!current || !CAN_LINK) return null;
     const base = shareLink(0); // ?src=<game>&t=0
     if (!base) return null;
-    return base.replace(/&t=0$/, '').replace(/\?t=0&/, '?') + '#bm=' + await encodeShared(bookmarks);
+    return base.replace(/&t=0$/, '').replace(/\?t=0&/, '?') + '#bm=' + await encodeShared(list);
   }
-  // The link icon: copies a link to this game with all my bookmarks in #bm= (or, with none, a link at the current time).
+  // The link icon: copies a link to this game with the bookmarks shown (all, or only the filtered tag) in #bm=
+  // (or, with none, a link at the current time).
   $('shareBm').addEventListener('click', async () => {
     if (!current) { flash('Load a game first'); return; }
+    const list = bookmarks.filter(shownBy);
     let link = null;
-    if (bookmarks.length) { try { link = await bookmarkShareLink(); } catch (e) { link = null; } }
+    if (list.length) { try { link = await bookmarkShareLink(list); } catch (e) { link = null; } }
     const text = link || shareAny(nowTime());
-    if (await copyText(text)) flash(link || CAN_LINK ? 'Link copied' : 'Copied ' + text);
+    if (await copyText(text)) flash(link ? 'Link copied' + (bmFilter ? ` (${TAGS[bmFilter][1].toLowerCase()} only)` : '') : CAN_LINK ? 'Link copied' : 'Copied ' + text);
     else { setStatus('Copy this: ' + text); flash('Copy from the status bar'); try { window.prompt('Copy this:', text); } catch (e) {} }
   });
   function isSaved(s) { return bookmarks.some((b) => Math.abs(b.t - s.t) < 0.05 && String(b.note || '') === s.note); }
@@ -1568,7 +1611,7 @@
     list.textContent = '';
     if (!on) return;
     shared.items.forEach((s, i) => {
-      const li = document.createElement('li'); li.dataset.i = String(i);
+      const li = document.createElement('li'); li.dataset.i = String(i); li.hidden = !shownBy(s);
       const t = document.createElement('button'); t.className = 't'; t.dataset.act = 'seek'; t.title = 'Seek'; t.textContent = fmt(s.t);
       const g = tagOf(s), tg = document.createElement('span');
       tg.className = 'bmtag' + (g ? ' ' + g : ''); if (g) { tg.textContent = TAGS[g][0]; tg.title = TAGS[g][1]; }
