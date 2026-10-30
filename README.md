@@ -92,6 +92,7 @@ The page looks up the stream URL for a broadcast ID through Hudl's own viewer en
 - **Order:** drag a bookmark by its grip (the dotted handle on the left; works with a mouse or a finger) to put the list in any order, or focus the grip and press Up / Down. New marks go in by time, and when the list is out of time order a **Sort by time** button appears next to **+ Mark**.
 - **Offense / defense:** the **O/D** button on each bookmark tags it as **O**ffense or **D**efense (click again to change or clear). Once anything is tagged, **All / Offense / Defense** buttons (with counts) appear above the list to show only one kind. While filtered, **M** tags new marks with that kind, and the link icon copies a link with only the bookmarks shown. The filter resets when you load another game.
 - **Sharing bookmarks:** the link icon in the bookmarks panel (**Copy link with bookmarks**) copies a link that opens this game with all your bookmarks (times, notes, tags and order) included. The bookmarks travel in the part of the link after `#`, which is never sent to a server. With no bookmarks it copies a plain link to the game at the current time. Opening such a link shows them under **Shared with you (not saved)**, separate from **My bookmarks**. Nothing is saved automatically, so a shared link can never overwrite anyone's own bookmarks. Shared bookmarks you already have (same time and note) are left out of that list, and a line under it says how many. Use the save icon on a shared bookmark to add a copy to your bookmarks; it then drops out of the shared list. The shared list stays while that game is loaded (a reload keeps it) and goes away when you load another game. A link with 30 typical bookmarks is about 500 characters.
+- **What's new:** a section at the bottom of the bookmarks panel, closed every time the page loads, lists new features, changes, fixes and how-tos, newest first, each with its date. Its header shows when the site was last updated. Click it to open.
 - **Panel size:** drag the left edge of the bookmarks/shortcuts panel to resize it (or focus the edge and use the arrow keys; double-click resets). The size is remembered. On narrow screens the panel sits below the video and isn't resizable.
 
 ## Casting (Chromecast / Google TV)
@@ -109,9 +110,7 @@ Older (legacy) games are cast from their H.264 variant stream, because Hudl's le
 
 ## Beta
 
-**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently differs from the main site in one way:
-
-- **What's new:** a section at the bottom of the bookmarks panel, closed every time the page loads, lists new features, changes, fixes and how-tos, newest first, each with its date. Its header shows when the site was last updated. Click it to open.
+**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it's the same as the main site until the next change is tried out there.
 
 Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
 
