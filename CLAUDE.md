@@ -91,7 +91,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 4. **Promote to main:** copy `beta/index.html` to `index.html`, then remove only `" (beta)"` from `<title>` and the `<span class="badge tag" …>beta</span>` in the top bar.
    - Check that `git show HEAD:beta/index.html | diff - index.html` shows only those two lines.
    - Update `README.md` for user-visible changes. Don't keep copies outside the repo.
-   - **What's new:** every user-visible change gets an entry at the top of `NOTES` (the "what's new" block, beta first), dated the day it lands on beta: `{d, k, t, b}` with `k` = `new`, `chg`, `fix` or `how`, plain text only. The list is sorted newest first (stable within a day), and its newest date is shown as "Updated". `#notesSec` is a `<details>` that is never opened automatically; `fitNotes()` caps the list's height in the wide layout so the panel doesn't outgrow the window.
+   - **What's new:** every user-visible change gets an entry at the top of `NOTES` (the "what's new" block, beta first), dated the day it lands on beta in US Central time (`TZ=America/Chicago git log --date=format-local:%F`); the What's new section itself has no entry: `{d, k, t, b}` with `k` = `new`, `chg`, `fix` or `how`, plain text only. The list is sorted newest first (stable within a day), and its newest date is shown as "Updated". `#notesSec` is a `<details>` that is never opened automatically; `fitNotes()` caps the list's height in the wide layout so the panel doesn't outgrow the window.
 5. **Commits:**
    - The commit identity is the GitHub noreply address (`2268265+borigas@users.noreply.github.com`).
    - Messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
