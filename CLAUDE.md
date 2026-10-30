@@ -26,7 +26,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 
 ## Architecture
 
-- **One HTML file**, plain JS in an IIFE. No build step, no server, no framework. It works from `file://` (minus Cast and YouTube). The only external script is hls.js 1.5.20 (cdnjs, with a jsDelivr fallback); the Cast sender and the YouTube IFrame API are loaded on demand.
+- **One HTML file**, plain JS in an IIFE. No build step, no server, no framework. It works from `file://` (minus Cast and YouTube). External scripts: hls.js 1.5.20 (cdnjs, with a jsDelivr fallback) and GoatCounter's `count.v4.js` (pinned with SRI, https only); the Cast sender and the YouTube IFrame API are loaded on demand.
 - **Hudl lookup chain:**
   - `parseInput()` order: `?B=` (GPAC), `bfplayvid=`, `/broadcast/embed/<id>`, `/api/broadcast/vmap/<id>`, YouTube, `.m3u8`, bare digits, then the last run of 6+ digits. Hudl patterns win over YouTube.
   - The broadcast ID is resolved via the VMAP `https://vcloud.hudl.com/api/broadcast/vmap/<id>`, fetched through Hudl's JSONP fetch proxy `https://vcloud.hudl.com/api/viewer/app/rss?url=<encoded>&callback=<fn>`. The response is `fn({success, status, contents})`.
@@ -53,6 +53,10 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - Consumed touches `preventDefault` their `touchend`, so the native `<video>` doesn't also react; single taps are untouched.
   - YouTube: the iframe swallows touches, so `#tapPad` (transparent, positioned over the iframe minus its bottom 48 px by `padSync()`) takes them. It is shown only when the primary pointer is coarse (`matchMedia('(pointer: coarse)')`) and after the video first plays (`YTP.started`), so YouTube's own play button gets the first tap. A single tap on the pad toggles play after 300 ms.
 - YouTube channel lists drop `upcoming` items (scheduled streams and premieres) unless they're `live`; the count line says how many were hidden.
+- **Usage counts (GoatCounter):** dashboard https://film.goatcounter.com (code `film`). The "usage counts" block loads `https://gc.zgo.at/count.v4.js` with `integrity` (re-hash it if the version changes) and settings `no_onload`, `no_events`.
+  - One page view per load with path `location.pathname` (`/` or `/beta/`) and no query. Events via `track(path, title)`: `game/hudl/<id>` (titled with the game), `game/youtube/<id>`, `game/stream` (never the URL), `list/hudl/<slug>`, `list/union`, `list/youtube/<handle>` (`trackList` skips repeats), `share/time`, `share/bookmarks`, `share/opened`, `cast`. On beta every event path starts with `beta/`.
+  - count.js sends `location.search` as `q=`; the loader wraps `goatcounter.url` to blank it, since `?src=` can hold a stream URL. Never send bookmark notes, shared data or stream URLs.
+  - count.js itself skips `file://`, localhost and frames; the loader skips anything but https. `https://film.origas.org/#toggle-goatcounter` turns counting off (or back on) in one browser.
 - **Cast:** Google Cast Web Sender with the Default Media Receiver. Only Hudl HLS is cast; on YouTube the button is hidden and an active session is ended. `CastPlan` chooses the URL and the HLS segment format.
 - **Storage keys** (all access goes through try/catch helpers):
   - localStorage:
@@ -79,6 +83,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 - **Never log, display, store or commit the raw VMAP response.** It contains AWS credentials. Extract the few fields needed and drop it (`lookupBroadcast` nulls it in `finally`).
 - Render untrusted text (titles, notes, API data, fragments) only via `textContent` or `escapeHtml`.
 - All localStorage and sessionStorage access goes through try/catch.
+- Analytics never carry bookmark notes, `#bm=` data, stream URLs or the page's query string.
 - No `eval`, and never execute fetched content. JSONP is limited to Hudl's endpoints, and YouTube data is `JSON.parse`d.
 - Keep the app a single file. Inline script string literals must not contain a literal `</script>`; write `<\/script>`.
 
