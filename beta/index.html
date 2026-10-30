@@ -212,6 +212,29 @@
   #sharedList .save:hover { color: var(--accent); border-color: var(--accent); }
   #sharedList .save svg { width: 16px; height: 16px; fill: currentColor; }
   .empty { color: var(--muted); font-size: 13px; }
+  /* What's new: closed on every load, at the bottom of the panel */
+  #notesSec { flex: none; padding: 6px 16px; }
+  #notesSec summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: 12px;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 2px 0; }
+  #notesSec summary::-webkit-details-marker { display: none; }
+  #notesSec summary::before { content: '\25B8'; font-size: 11px; transition: transform .15s; }
+  #notesSec[open] summary::before { transform: rotate(90deg); }
+  #notesSec summary:hover { color: var(--text); }
+  #notesSec summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #notesUpdated { margin-left: auto; text-transform: none; letter-spacing: 0; }
+  #notesList { list-style: none; margin: 6px 0 4px; padding: 0 4px 0 0; max-height: 40vh; overflow: auto; }
+  #notesList li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  #notesList li:last-child { border-bottom: none; }
+  #notesList .nhead { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  #notesList .nkind { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-radius: 3px; padding: 0 5px;
+    border: 1px solid currentColor; }
+  #notesList .nkind.new { color: var(--accent); }
+  #notesList .nkind.chg { color: var(--warn); }
+  #notesList .nkind.fix { color: var(--off); }
+  #notesList .nkind.how { color: var(--def); }
+  #notesList .ntitle { font-weight: 600; }
+  #notesList .ndate { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  #notesList .nbody { color: var(--muted); margin-top: 2px; }
   #legend { font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
   kbd { background: var(--panel2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
     font: 11px ui-monospace, Consolas, monospace; white-space: nowrap; }
@@ -337,6 +360,10 @@
       </div>
       <div class="small" style="margin-top:6px">YouTube: after clicking inside the YouTube player, its own keys apply; click outside it to use these.</div>
     </section>
+    <details id="notesSec">
+      <summary>What's new <span id="notesUpdated"></span></summary>
+      <ul id="notesList" aria-label="New features, changes and how-tos, newest first"></ul>
+    </details>
     </div>
   </aside>
 </main>
@@ -1693,6 +1720,62 @@
     showNotice(`<strong>The shared bookmarks in this link couldn't be read</strong> (${escapeHtml(sharedError)}). The game loaded without them.`, false);
     sharedError = '';
   }
+
+  // ---------- what's new ----------
+  // Add an entry (top of the list) with every user-visible change; the newest date is shown as "Updated".
+  // d: date added (YYYY-MM-DD); k: new | chg (change) | fix | how (how-to); t: title; b: body. Plain text only.
+  const NOTES = [
+    { d: '2026-10-30', k: 'new', t: "What's new", b: 'This list: new features, changes and how-tos, newest first, with the date the site was last updated.' },
+    { d: '2026-10-30', k: 'chg', t: 'Shared links skip bookmarks you already have', b: 'Opening a bookmark link no longer lists marks you already have (same time and note). A line under the list says how many were skipped.' },
+    { d: '2026-10-30', k: 'how', t: 'Send just your defense clips', b: 'Tag bookmarks D, pick Defense above the list, then click the link icon: the link holds only the bookmarks shown.' },
+    { d: '2026-10-30', k: 'how', t: 'Mark a run of offensive plays', b: 'Pick Offense above the bookmark list, then press M at each play: new marks are tagged O.' },
+    { d: '2026-10-30', k: 'new', t: 'Offense / defense filter', b: 'Once anything is tagged, All / Offense / Defense buttons above the bookmarks show only one kind.' },
+    { d: '2026-10-30', k: 'new', t: 'Tag bookmarks O or D', b: 'The O/D button on a bookmark tags it offense or defense; click again to change or clear. Share links carry the tags.' },
+    { d: '2026-10-30', k: 'new', t: 'Reorder bookmarks', b: 'Drag a bookmark by the dotted grip on its left (mouse or finger), or focus the grip and press Up / Down. Sort by time puts them back in order.' },
+    { d: '2026-10-28', k: 'new', t: 'Touch gestures', b: 'On a phone or tablet: double-tap the left or right side to go back or forward 10 s, the middle for full screen; press and hold to play at 2x.' },
+    { d: '2026-10-28', k: 'chg', t: 'No upcoming games in lists', b: 'Game lists show games live now and recent games only, since scheduled games have no video yet.' },
+    { d: '2026-10-28', k: 'new', t: 'Compact header', b: 'The header is one slim bar with the game name and date. Find a game (or the / key) opens the search.' },
+    { d: '2026-10-28', k: 'new', t: 'Reload keeps your place', b: 'Reloading or going back resumes where you were. The address bar time only changes while paused, so it is easy to copy.' },
+    { d: '2026-10-28', k: 'how', t: 'Copy a link to this moment', b: 'Pause and copy the address bar, or use Copy link; the link opens the game at that time.' },
+    { d: '2026-10-28', k: 'new', t: 'Share bookmarks', b: 'The link icon in the bookmark panel copies a link with all your bookmarks. Whoever opens it sees them as shared, and saves the ones they want.' },
+    { d: '2026-10-28', k: 'new', t: 'Resizable panel', b: 'Drag the left edge of this panel to resize it; double-click resets.' },
+    { d: '2026-10-28', k: 'new', t: "Men's Basketball first", b: "Game lists open on Men's Basketball (including games filed as Basketball); pick All sports for the rest." },
+    { d: '2026-10-28', k: 'new', t: 'School search and YouTube', b: 'Type a school name in Find a game to see its Hudl games or YouTube channel. Union games lists every Union game across opponents\u2019 sites.' },
+    { d: '2026-10-27', k: 'new', t: 'Hide the panel', b: 'Press B (or the chevron at the top) to hide or show this panel.' },
+    { d: '2026-10-27', k: 'fix', t: 'Cast button', b: 'The Cast button now appears when a Chromecast or Google TV is found.' },
+    { d: '2026-10-27', k: 'new', t: 'Game film viewer', b: 'Plays Hudl, BlueFrame and GPAC games with film-review shortcuts and bookmarks, and casts to a TV.' },
+  ];
+  const NOTE_KINDS = { new: 'New', chg: 'Change', fix: 'Fix', how: 'How to' };
+  function noteDate(d, withYear) {
+    const dt = new Date(d + 'T12:00:00');
+    return isNaN(dt) ? d : dt.toLocaleDateString(undefined, withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
+  }
+  (function renderNotes() {
+    const notes = NOTES.map((n, i) => ({ n, i })).sort((a, b) => (a.n.d < b.n.d ? 1 : a.n.d > b.n.d ? -1 : a.i - b.i)).map((x) => x.n);
+    const list = $('notesList');
+    notes.forEach((n) => {
+      const li = document.createElement('li'), head = document.createElement('div'); head.className = 'nhead';
+      const kind = document.createElement('span'); kind.className = 'nkind ' + n.k; kind.textContent = NOTE_KINDS[n.k] || n.k;
+      const title = document.createElement('span'); title.className = 'ntitle'; title.textContent = n.t;
+      const date = document.createElement('span'); date.className = 'ndate'; date.textContent = noteDate(n.d, false); date.title = noteDate(n.d, true);
+      head.appendChild(kind); head.appendChild(title); head.appendChild(date);
+      const body = document.createElement('div'); body.className = 'nbody'; body.textContent = n.b;
+      li.appendChild(head); li.appendChild(body); list.appendChild(li);
+    });
+    if (notes.length) $('notesUpdated').textContent = 'Updated ' + noteDate(notes[0].d, true);
+  })();
+  // Wide layout: the panel is as tall as the window, so an open list takes only the room left (bookmarks shrink to
+  // their minimum first) and scrolls inside. Narrow layout: the page scrolls, so just bring the list into view.
+  function fitNotes() {
+    const sec = $('notesSec'), list = $('notesList');
+    list.style.maxHeight = '';
+    if (!sec.open) return;
+    if (matchMedia('(max-width: 860px)').matches) { sec.scrollIntoView({ block: 'nearest' }); return; }
+    const over = document.documentElement.scrollHeight - window.innerHeight;
+    if (over > 0) list.style.maxHeight = Math.max(120, list.getBoundingClientRect().height - over) + 'px';
+  }
+  $('notesSec').addEventListener('toggle', fitNotes);
+  window.addEventListener('resize', () => { if ($('notesSec').open) fitNotes(); });
 
   // ---------- collapsible panel ----------
   function updatePanelToggle() {
