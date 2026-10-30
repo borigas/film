@@ -211,7 +211,6 @@
   #sharedList .save { background: none; border: 1px solid transparent; color: var(--muted); padding: 2px 4px; line-height: 0; }
   #sharedList .save:hover { color: var(--accent); border-color: var(--accent); }
   #sharedList .save svg { width: 16px; height: 16px; fill: currentColor; }
-  #sharedList .save.saved { color: var(--accent); cursor: default; border-color: transparent; }
   .empty { color: var(--muted); font-size: 13px; }
   #legend { font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
   kbd { background: var(--panel2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
@@ -304,7 +303,7 @@
     <section id="sharedSection" hidden aria-label="Bookmarks shared with you, not saved">
       <h2>Shared with you <span class="nosave">not saved</span></h2>
       <ul id="sharedList"></ul>
-      <div class="small">Use the save icon to add one to your bookmarks.</div>
+      <div class="small">Use the save icon to add one to your bookmarks.<span id="sharedDup"></span></div>
     </section>
     <section id="bmSection">
       <h2><span id="bmTitle">Bookmarks</span> <span>
@@ -1412,8 +1411,7 @@
     }
   }
   function renderFilter() {
-    const sharedItems = (shared && current && shared.key === current.key) ? shared.items : [];
-    const any = bookmarks.some(tagOf) || sharedItems.some(tagOf);
+    const any = bookmarks.some(tagOf) || sharedFresh().some(tagOf);
     $('bmFilter').hidden = !any && !bmFilter;
     const n = { '': bookmarks.length, o: 0, d: 0 };
     bookmarks.forEach((b) => { const g = tagOf(b); if (g) n[g]++; });
@@ -1602,26 +1600,35 @@
     if (await copyText(text)) flash(link ? 'Link copied' + (bmFilter ? ` (${TAGS[bmFilter][1].toLowerCase()} only)` : '') : CAN_LINK ? 'Link copied' : 'Copied ' + text);
     else { setStatus('Copy this: ' + text); flash('Copy from the status bar'); try { window.prompt('Copy this:', text); } catch (e) {} }
   });
+  // A shared bookmark I already have (same time and note; the tag doesn't matter) isn't offered again.
   function isSaved(s) { return bookmarks.some((b) => Math.abs(b.t - s.t) < 0.05 && String(b.note || '') === s.note); }
+  function sharedFresh() { // the loaded game's shared bookmarks that aren't in my list yet
+    return shared && current && shared.key === current.key ? shared.items.filter((s) => !isSaved(s)) : [];
+  }
+  function sharedSummary(items) { // flash text for a link that just arrived
+    const fresh = items.filter((s) => !isSaved(s)).length, dup = items.length - fresh;
+    if (!fresh) return `${dup === 1 ? 'The shared bookmark is' : `All ${dup} shared bookmarks are`} already in your list`;
+    return `${fresh} shared bookmark${fresh === 1 ? '' : 's'}` + (dup ? ` (${dup} already in your list)` : '');
+  }
   function renderShared() {
     const sec = $('sharedSection'), list = $('sharedList');
-    const on = !!(shared && current && shared.key === current.key && shared.items.length);
+    const all = shared && current && shared.key === current.key ? shared.items : [];
+    const dup = all.filter(isSaved).length, on = all.length > dup;
     sec.hidden = !on;
     $('bmTitle').textContent = on ? 'My bookmarks' : 'Bookmarks';
+    $('sharedDup').textContent = dup ? ` ${dup} already in your bookmarks ${dup === 1 ? 'is' : 'are'} not shown.` : '';
     list.textContent = '';
     if (!on) return;
-    shared.items.forEach((s, i) => {
+    all.forEach((s, i) => {
+      if (isSaved(s)) return;
       const li = document.createElement('li'); li.dataset.i = String(i); li.hidden = !shownBy(s);
       const t = document.createElement('button'); t.className = 't'; t.dataset.act = 'seek'; t.title = 'Seek'; t.textContent = fmt(s.t);
       const g = tagOf(s), tg = document.createElement('span');
       tg.className = 'bmtag' + (g ? ' ' + g : ''); if (g) { tg.textContent = TAGS[g][0]; tg.title = TAGS[g][1]; }
       const n = document.createElement('span'); n.className = 'snote'; n.textContent = s.note; if (!s.note) { n.textContent = '(no note)'; n.classList.add('empty'); }
       const sv = document.createElement('button'); sv.className = 'save'; sv.dataset.act = 'save';
-      const done = isSaved(s);
-      sv.classList.toggle('saved', done); sv.disabled = done;
-      sv.title = done ? 'Saved to my bookmarks' : 'Save to my bookmarks'; sv.setAttribute('aria-label', sv.title);
-      sv.innerHTML = done ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>'
-        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>';
+      sv.title = 'Save to my bookmarks'; sv.setAttribute('aria-label', sv.title);
+      sv.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>';
       li.appendChild(t); li.appendChild(tg); li.appendChild(n); li.appendChild(sv); list.appendChild(li);
     });
   }
@@ -1633,12 +1640,15 @@
     else if (btn.dataset.act === 'save') {
       // Adds a copy to this browser's bookmarks for this game; never replaces or removes any.
       if (!isSaved(s)) { const b = { t: s.t, note: s.note, at: Date.now() }; if (s.tag) b.tag = s.tag; insertByTime(b); saveBookmarks(); }
-      renderBookmarks(); flash(`Saved ${fmt(s.t)}`);
+      renderBookmarks(); flash(`Saved ${fmt(s.t)}`); // it now matches mine, so it leaves the shared list
     }
   });
   // Called whenever the loaded game changes (from loadBookmarks).
   function syncShared() {
-    if (sharedPending && current) { shared = { key: current.key, items: sharedPending.items }; sharedHash = sharedPending.hash; sharedPending = null; }
+    if (sharedPending && current) {
+      shared = { key: current.key, items: sharedPending.items }; sharedHash = sharedPending.hash; sharedPending = null;
+      flash(sharedSummary(shared.items));
+    }
     else if (shared && (!current || shared.key !== current.key)) {
       shared = null; sharedHash = ''; // a different game: the shared bookmarks (and the #bm fragment) go away
       try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
@@ -1674,8 +1684,8 @@
     shared = { key, items }; sharedHash = '#bm=' + m[1];
     if (/^The shared bookmarks in this link/.test(noticeEl.textContent)) hideNotice(); // an earlier bad link's notice
     renderBookmarks();
-    if (panelCollapsed) setPanel(false, false); // make sure they're visible
-    flash(`${items.length} shared bookmark${items.length === 1 ? '' : 's'}`);
+    if (panelCollapsed && sharedFresh().length) setPanel(false, false); // make sure they're visible
+    flash(sharedSummary(items));
   });
   let sharedError = '';
   function showSharedError() {
