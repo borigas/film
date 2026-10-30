@@ -37,7 +37,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - Its variant playlists and segments are on CloudFront, which sends `Access-Control-Allow-Origin: *`; Hudl's other CDN URLs do too. Casting a legacy game sends the TV the H.264 variant URL directly.
 - **hls.js** keeps only `avc1` levels (`restrictToAvc`), so HEVC variants are hidden. Safari uses native HLS if MediaSource is missing.
 - **Listing and search:** `https://vcloud.hudl.com/api/viewer/broadcast` (JSONP).
-  - Params: `sites=a,b,c` (comma list; slugs are case-insensitive, but responses keep the site's own case, e.g. `NebWesleyan`), `viewer_status` (`2` = live now, `status` "Streaming"; `1` = upcoming, `status` "Upcoming"; `3` = both; `4` = archived; checked against real responses Oct 2026). Beta's default list uses `2` (sort asc) for **Live now** plus `4` (sort desc) for recent games; upcoming games are never listed (no video yet), and `renderNormal` also drops any `status` matching /upcoming/. Main still uses `3` until promoted. Other params: `sort_by=date`, `sort_dir`, `per_page` (30; 100 for the sport-menu sample), `page`, `title` (every word must appear), `section_id`, `after` / `before` (ISO instants).
+  - Params: `sites=a,b,c` (comma list; slugs are case-insensitive, but responses keep the site's own case, e.g. `NebWesleyan`), `viewer_status` (`2` = live now, `status` "Streaming"; `1` = upcoming, `status` "Upcoming"; `3` = both; `4` = archived; checked against real responses Oct 2026). The default list uses `2` (sort asc) for **Live now** plus `4` (sort desc) for recent games; upcoming games are never listed (no video yet), and `renderNormal` also drops any `status` matching /upcoming/. Other params: `sort_by=date`, `sort_dir`, `per_page` (30; 100 for the sport-menu sample), `page`, `title` (every word must appear), `section_id`, `after` / `before` (ISO instants).
   - Response: `broadcasts[]`, `item_count`, `num_pages`.
   - **Section ids are global** (`api/viewer/section` lists them with `site: null`): 45 Men's Basketball, 46 Women's Basketball, 1 generic Basketball (also 4900 Boys, 4901 Girls).
   - `section_id=45,1` (comma list) returns one date-sorted, correctly paged result across both. A repeated `section_id=` keeps only the last value. `id=` is ignored.
@@ -48,7 +48,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - `onError` codes handled: 2, 5, 100, 101, 150 and 153. 153 is the missing referrer, which always happens on `file://`.
   - Channel lists come from `https://www.youtube.com/channel/<UC…>/streams` or `/videos`, fetched through the proxy (about 1.3 MB). `ytInitialData` is cut out (`var ytInitialData = ` … `;</script>`), `JSON.parse`d, and walked for `lockupViewModel`, `videoRenderer` and `gridVideoRenderer`. That gives about 30 videos.
   - YouTube RSS feeds return 404 for every channel, so they aren't used.
-- **Touch gestures** (beta; the "touch gestures" block just before CastPlan): pointer events on `#videoWrap`, `pointerType === 'touch'` only, so mouse behaviour is unchanged.
+- **Touch gestures** (the "touch gestures" block just before CastPlan): pointer events on `#videoWrap`, `pointerType === 'touch'` only, so mouse behaviour is unchanged.
   - Double-tapping the left or right 40% calls `seekBy(∓10)` (the J/K path); further taps within 700 ms add 10 s each. Double-tapping the middle calls `toggleFullscreen()` (shared with F). Holding for 400 ms with less than 10 px of movement calls `applyRate(2)`, and release or pointercancel restores the previous rate. Hold is ignored while paused or casting. The bottom 48 px of the player is ignored.
   - Consumed touches `preventDefault` their `touchend`, so the native `<video>` doesn't also react; single taps are untouched.
   - YouTube: the iframe swallows touches, so `#tapPad` (transparent, positioned over the iframe minus its bottom 48 px by `padSync()`) takes them. It is shown only when the primary pointer is coarse (`matchMedia('(pointer: coarse)')`) and after the video first plays (`YTP.started`), so YouTube's own play button gets the first tap. A single tap on the pad toggles play after 300 ms.
@@ -56,7 +56,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 - **Cast:** Google Cast Web Sender with the Default Media Receiver. Only Hudl HLS is cast; on YouTube the button is hidden and an active session is ended. `CastPlan` chooses the URL and the HLS segment format.
 - **Storage keys** (all access goes through try/catch helpers):
   - localStorage:
-    - `hudl-film-viewer:bookmarks:<key>`, where `<key>` is the broadcast ID, `yt:<videoId>` or `url:<m3u8 without query>`; the value is `[{t, note, at, tag?}]` in display order (beta: drag or Up/Down on the grip reorders; `addBookmark` inserts by time; `tag` is `'o'` offense or `'d'` defense, absent for none; `bmFilter` hides other rows with `hidden`, keeps indices intact, tags new marks and limits the share link to the rows shown). Main still sorts by time on render and ignores `tag`, but keeps it;
+    - `hudl-film-viewer:bookmarks:<key>`, where `<key>` is the broadcast ID, `yt:<videoId>` or `url:<m3u8 without query>`; the value is `[{t, note, at, tag?}]` in display order (drag or Up/Down on the grip reorders; `addBookmark` inserts by time; `tag` is `'o'` offense or `'d'` defense, absent for none; `bmFilter` hides other rows with `hidden`, keeps indices intact, tags new marks and limits the share link to the rows shown).;
     - `hudl-film-viewer:lastSite`;
     - `hudl-film-viewer:panelCollapsed`;
     - `hudl-film-viewer:panelWidth`;
@@ -69,7 +69,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - **Resume rule:** on load, the sessionStorage live time is used only if the navigation type is `reload` or `back_forward`, it's the same game, and the URL's `t=` equals `urlT` or `urlFinalT` (what this tab last wrote). Otherwise the URL's `t=` wins. A reload uses the URL from before the unload-time write; back/forward uses the one after it.
   - A same-document `#bm=` change (a share link pasted for the open game) is applied on `hashchange`.
 - **Share links (`#bm=`):**
-  - Encoding: `1.` + base64url(deflate-raw(JSON)) when CompressionStream exists, else `0.` + base64url(JSON). The JSON is `{v:1, b:[[tenthsOfSecond, note, tag?], …]}`; the optional third element is `'o'` or `'d'` (beta), and older decoders ignore it. Beta keeps the sender's order; main sorts by time.
+  - Encoding: `1.` + base64url(deflate-raw(JSON)) when CompressionStream exists, else `0.` + base64url(JSON). The JSON is `{v:1, b:[[tenthsOfSecond, note, tag?], …]}`; the optional third element is `'o'` or `'d'`, and older decoders ignore it. The decoder keeps the sender's order.
   - Decode limits: fragment ≤ 200 KB; decompressed ≤ 64 KB; ≤ 300 bookmarks; notes ≤ 300 characters; times finite, ≥ 0 and ≤ 10 days. Anything malformed shows a small notice.
   - Shared bookmarks are shown in their own section and saved only by an explicit per-item save, which adds and never replaces.
 
