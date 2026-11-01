@@ -94,6 +94,7 @@ The page looks up the stream URL for a broadcast ID through Hudl's own viewer en
 - **Current bookmark and N / P:** the bookmark you're watching (the latest one at or before the playhead) is highlighted, and the list scrolls to keep it in view. **N** jumps to the next bookmark and **P** to the previous one, in time order whatever the list order. **P** more than 2 seconds into a mark goes back to its start first, so it replays the play. With **Offense** or **Defense** picked, both skip the other kind.
 - **Sharing bookmarks:** the link icon in the bookmarks panel (**Copy link with bookmarks**) copies a link that opens this game with all your bookmarks (times, notes, tags and order) included. The bookmarks travel in the part of the link after `#`, which is never sent to a server. With no bookmarks it copies a plain link to the game at the current time. Opening such a link shows them under **Shared with you (not saved)**, separate from **My bookmarks**. Nothing is saved automatically, so a shared link can never overwrite anyone's own bookmarks. Shared bookmarks you already have (same time and note) are left out of that list, and a line under it says how many. Use the save icon on a shared bookmark to add a copy to your bookmarks; it then drops out of the shared list. The shared list stays while that game is loaded (a reload keeps it) and goes away when you load another game. A link with 30 typical bookmarks is about 500 characters.
 - **What's new:** a section at the bottom of the bookmarks panel, closed every time the page loads, lists new features, changes, fixes and how-tos, newest first, each with its date. Its header shows when the site was last updated. Click it to open.
+- **Update notice:** the page is often left open for a long time, so while it's open it checks every 10 minutes (and when you come back to the tab) whether a newer version of the site is out. If there is one, a small note at the bottom left offers **Refresh**; refreshing keeps your place in the game. × dismisses it until the next new version. A new version can take up to about 20 minutes to be noticed.
 - **Panel size:** drag the left edge of the bookmarks/shortcuts panel to resize it (or focus the edge and use the arrow keys; double-click resets). The size is remembered. On narrow screens the panel sits below the video and isn't resizable.
 
 ## Casting (Chromecast / Google TV)
@@ -115,9 +116,7 @@ The page counts visits and a few actions (games loaded and played, minutes spent
 
 ## Beta
 
-**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently differs from the main site in one way:
-
-- **Update notice:** the page is often left open for a long time, so while it's open it checks every 10 minutes (and when you come back to the tab) whether a newer version of the site is out. If there is one, a small note at the bottom left offers **Refresh**; refreshing keeps your place in the game. × dismisses it until the next new version. A new version can take up to about 20 minutes to be noticed.
+**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it's the same as the main site until the next change is tried out there.
 
 Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
 

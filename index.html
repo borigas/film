@@ -133,6 +133,13 @@
     font-variant-numeric: tabular-nums; font-size: 13px; pointer-events: none; transition: opacity .3s; }
   #flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--overlay); color: var(--overlay-text);
     padding: 10px 16px; border-radius: 8px; font-size: 18px; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  /* "new version" toast: bottom-left, out of the way of the player's controls and the panel */
+  #updToast { position: fixed; left: 16px; bottom: 16px; z-index: 900; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
+    background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 8px; padding: 8px 8px 8px 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25); font-size: 13px; }
+  #updToast button { padding: 3px 10px; font-size: 13px; }
+  #updToast .x { background: none; border: none; color: var(--muted); padding: 2px 6px; font-size: 16px; line-height: 1; }
+  #updToast .x:hover { color: var(--text); }
   /* touch gestures: double tap a side to skip 10s, hold to play at 2x (no double-tap zoom or long-press callout here) */
   #videoWrap { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #tapPad { position: absolute; background: transparent; touch-action: manipulation; } /* over the YouTube iframe, above its control bar */
@@ -287,6 +294,11 @@
   </button>
 </header>
 <div id="notice" role="status"></div>
+<div id="updToast" role="status" hidden>
+  <span>A new version of this page is available.</span>
+  <button type="button" class="primary" id="updReload">Refresh</button>
+  <button type="button" class="x" id="updClose" title="Dismiss" aria-label="Dismiss">&times;</button>
+</div>
 <section id="finder" hidden aria-label="Find a game">
   <div class="frow">
     <div id="schoolBox">
@@ -1850,10 +1862,43 @@
     sharedError = '';
   }
 
+  // ---------- new version notice ----------
+  // Every 10 minutes (and on coming back to the tab after 2+ minutes away) fetch this page fresh and compare it with
+  // the copy the browser loaded; if they differ, offer a refresh. Comparing content, not Last-Modified / ETag, means
+  // a deploy that only touches other files (README, the other site) doesn't prompt. GitHub Pages caches for up to
+  // 10 minutes, so a new version shows up 0-20 minutes after it's pushed. Dismissing hides it until the page changes
+  // again. A refresh resumes playback where it was (the reload resume rule).
+  const UPD = { base: null, seen: '', last: 0, busy: false };
+  async function checkUpdate() {
+    if (!/^https?:$/.test(location.protocol) || UPD.busy) return;
+    UPD.busy = true; UPD.last = Date.now();
+    try {
+      if (UPD.base == null) { // what this tab loaded: the browser's cached copy of this exact URL
+        const r0 = await fetch(location.href.split('#')[0], { cache: 'force-cache' });
+        if (r0.ok) UPD.base = await r0.text();
+        return;
+      }
+      const r = await fetch(location.pathname, { cache: 'no-store' });
+      if (!r.ok) return;
+      const text = await r.text();
+      if (!/^\s*<!doctype html/i.test(text) || text === UPD.base || text === UPD.seen) return;
+      UPD.seen = text;
+      $('updToast').hidden = false;
+    } catch (e) {} finally { UPD.busy = false; }
+  }
+  $('updReload').addEventListener('click', () => { location.reload(); });
+  $('updClose').addEventListener('click', () => { $('updToast').hidden = true; });
+  setTimeout(checkUpdate, 3000);
+  setInterval(() => { if (document.visibilityState === 'visible') checkUpdate(); }, 600000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - UPD.last > 120000) checkUpdate();
+  });
+
   // ---------- what's new ----------
   // Add an entry (top of the list) with every user-visible change; the newest date is shown as "Updated".
   // d: date added to beta, in Central time (YYYY-MM-DD); k: new | chg (change) | fix | how (how-to); t: title; b: body. Plain text only.
   const NOTES = [
+    { d: '2026-11-01', k: 'new', t: 'Update notice', b: 'When a newer version of the site is out, a small note at the bottom left offers to refresh. Refreshing keeps your place in the game.' },
     { d: '2026-11-01', k: 'how', t: 'Replay a play', b: 'Press P while a marked play runs to go back to its start; press P again for the mark before it.' },
     { d: '2026-11-01', k: 'new', t: 'Next / previous bookmark (N / P)', b: 'N jumps to the next bookmark after the playhead and P to the previous one, in time order. With Offense or Defense picked, they skip the others.' },
     { d: '2026-11-01', k: 'new', t: 'Current bookmark highlighted', b: 'The bookmark you are watching (the latest one before the playhead) is highlighted in the list, which scrolls to keep it in view.' },
