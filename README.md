@@ -114,7 +114,9 @@ The page counts visits and a few actions (games loaded and played, minutes spent
 
 ## Beta
 
-**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it's the same as the main site until the next change is tried out there.
+**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently differs from the main site in one way:
+
+- **Current bookmark and N / P:** the bookmark you're watching (the latest one at or before the playhead) is highlighted, and the list scrolls to keep it in view. **N** jumps to the next bookmark and **P** to the previous one, in time order whatever the list order. **P** more than 2 seconds into a mark goes back to its start first, so it replays the play. With **Offense** or **Defense** picked, both skip the other kind.
 
 Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
 
@@ -131,6 +133,7 @@ Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t
 | \ | Reset speed to 1x |
 | 0 to 9 | Jump to 0% to 90% |
 | M | Bookmark current time (type a note, Enter to finish) |
+| N / P | Next / previous bookmark by time (P first goes back to the start of the current one; only the shown kind when filtered) *(beta)* |
 | F | Fullscreen |
 | B | Hide / show the bookmarks and shortcuts panel (remembered; also the chevron button at the top of the panel) |
 | / | Open **Find a game** and put the cursor in its box |

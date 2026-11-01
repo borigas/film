@@ -63,7 +63,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
 - **Cast:** Google Cast Web Sender with the Default Media Receiver. Only Hudl HLS is cast; on YouTube the button is hidden and an active session is ended. `CastPlan` chooses the URL and the HLS segment format.
 - **Storage keys** (all access goes through try/catch helpers):
   - localStorage:
-    - `hudl-film-viewer:bookmarks:<key>`, where `<key>` is the broadcast ID, `yt:<videoId>` or `url:<m3u8 without query>`; the value is `[{t, note, at, tag?}]` in display order (drag or Up/Down on the grip reorders; `addBookmark` inserts by time; `tag` is `'o'` offense or `'d'` defense, absent for none; `bmFilter` hides other rows with `hidden`, keeps indices intact, tags new marks and limits the share link to the rows shown).;
+    - `hudl-film-viewer:bookmarks:<key>`, where `<key>` is the broadcast ID, `yt:<videoId>` or `url:<m3u8 without query>`; the value is `[{t, note, at, tag?}]` in display order (drag or Up/Down on the grip reorders; `addBookmark` inserts by time; `tag` is `'o'` offense or `'d'` defense, absent for none; `bmFilter` hides other rows with `hidden`, keeps indices intact, tags new marks and limits the share link to the rows shown; the "current mark" block highlights `li.cur`, the latest shown mark with `t <= now + 0.3`, every 400 ms and scrolls only `#bmSection`; `jumpMark` (N / P) goes by time, and P targets marks more than 2 s behind the playhead).;
     - `hudl-film-viewer:lastSite`;
     - `hudl-film-viewer:panelCollapsed`;
     - `hudl-film-viewer:panelWidth`;
