@@ -115,7 +115,9 @@ The page counts visits and a few actions (games loaded and played, minutes spent
 
 ## Beta
 
-**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it's the same as the main site until the next change is tried out there.
+**https://film.origas.org/beta/** (`beta/index.html`) is where changes are tried out before they reach the main site. Its page is labelled "beta" (in the tab title and a small tag in the header), and it currently differs from the main site in one way:
+
+- **Update notice:** the page is often left open for a long time, so while it's open it checks every 10 minutes (and when you come back to the tab) whether a newer version of the site is out. If there is one, a small note at the bottom left offers **Refresh**; refreshing keeps your place in the game. × dismisses it until the next new version. A new version can take up to about 20 minutes to be noticed.
 
 Links work the same way there, e.g. `https://film.origas.org/beta/?src=4679968&t=5000`. Bookmarks, recent schools and panel settings are shared between the two, since they're on the same site.
 

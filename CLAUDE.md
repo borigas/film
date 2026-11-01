@@ -60,6 +60,7 @@ tools/directory/    school-list build: scrape.py, build.py, report.py, report_no
   - Usage counting is not a What's new item: the owner asked to keep it out.
   - count.js sends `location.search` as `q=`; the loader wraps `goatcounter.url` to blank it, since `?src=` can hold a stream URL. Never send bookmark notes, shared data or stream URLs.
   - count.js itself skips `file://`, localhost and frames; the loader skips anything but https. `https://film.origas.org/#toggle-goatcounter` turns counting off (or back on) in one browser.
+- **New version notice** (the "new version notice" block): `checkUpdate()` takes a baseline with `fetch(location.href, {cache: 'force-cache'})` 3 s after load (the browser's copy of what it loaded), then every 10 minutes while visible, and on returning to the tab after 2+ minutes, fetches `location.pathname` with `no-store` and compares the text. A difference shows `#updToast` (Refresh reloads; × hides it until the content changes again). Content, not Last-Modified / ETag, because Pages bumps those for every deploy. Pages' `max-age=600` means 0–20 minutes of lag.
 - **Cast:** Google Cast Web Sender with the Default Media Receiver. Only Hudl HLS is cast; on YouTube the button is hidden and an active session is ended. `CastPlan` chooses the URL and the HLS segment format.
 - **Storage keys** (all access goes through try/catch helpers):
   - localStorage:
