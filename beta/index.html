@@ -365,7 +365,7 @@
     </section>
     <section id="bmSection">
       <h2><span id="bmTitle">Bookmarks</span> <span>
-        <button id="addBm" title="Mark current time (M)">+ Mark</button>
+        <button id="addBm" title="Mark current time (C)">+ Mark</button>
         <button id="sortBm" class="icon" type="button" hidden title="Sort by time" aria-label="Sort bookmarks by time"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg></button>
         <button id="shareBm" class="icon" type="button" title="Copy link with bookmarks" aria-label="Copy link with bookmarks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/></svg></button>
       </span></h2>
@@ -376,7 +376,7 @@
       </div>
       <ul id="bmList"></ul>
       <div id="bmNone" class="empty" hidden></div>
-      <div id="bmEmpty" class="empty">Press <kbd>M</kbd> to mark the current time.</div>
+      <div id="bmEmpty" class="empty">Press <kbd>C</kbd> to mark the current time.</div>
     </section>
     <details id="keysSec" class="fold">
       <summary>Shortcuts</summary>
@@ -390,8 +390,8 @@
         <span><kbd>&darr;</kbd> <kbd>&uarr;</kbd></span><span>Slower / faster (also <kbd>[</kbd> <kbd>]</kbd>)</span>
         <span><kbd>\</kbd></span><span>Reset speed to 1x</span>
         <span><kbd>0</kbd>&ndash;<kbd>9</kbd></span><span>Jump to 0&ndash;90%</span>
-        <span><kbd>M</kbd></span><span>Add bookmark</span>
-        <span><kbd>N</kbd> <kbd>P</kbd></span><span>Next / previous bookmark (P replays the current one first)</span>
+        <span><kbd>C</kbd></span><span>Add bookmark (clip); <kbd>M</kbd> also works</span>
+        <span><kbd>N</kbd> <kbd>P</kbd></span><span>Next / previous bookmark, starting 2s before it (P replays the current one first)</span>
         <span><kbd>F</kbd></span><span>Fullscreen</span>
         <span><kbd>B</kbd></span><span>Hide / show this panel</span>
       </div>
@@ -1580,18 +1580,44 @@
     }, 4000));
   }
   // ---- current mark and N / P ----
-  // The current mark is the latest shown bookmark at or before the playhead (ties: the first in list order). It's
-  // highlighted and kept in view inside the bookmark list (never by scrolling the page). N / P go by time, not list
-  // order: N to the first mark after the playhead, P to the start of the current mark if more than 2 s in, else the
-  // one before it.
+  // The current mark is the latest shown bookmark at or before the playhead (ties: the first in list order), except
+  // that a mark just opened (clicked, or reached with N / P) stays current until the playhead reaches the next mark or
+  // goes back past the previous one, so rewinding a little doesn't jump the highlight to a mark minutes earlier.
+  // Opening a mark starts PREROLL seconds before it. It's highlighted and kept in view inside the bookmark list (never
+  // by scrolling the page). N / P go by time, not list order: N to the mark after the current one, P back to the start
+  // of the current mark if more than 2 s past it, else to the one before it.
+  const PREROLL = 2;
   let bmCur = -1;
+  let bmOpen = null; // { b: the opened bookmark, floor: where opening it sought to }
   function markAt(now) {
     let best = -1;
     bookmarks.forEach((b, i) => { if (shownBy(b) && b.t <= now + 0.3 && (best < 0 || b.t > bookmarks[best].t)) best = i; });
     return best;
   }
+  function shownByTime() { // indices of the shown marks, by time (ties in list order)
+    return bookmarks.map((b, i) => i).filter((i) => shownBy(bookmarks[i]))
+      .sort((x, y) => bookmarks[x].t - bookmarks[y].t || x - y);
+  }
+  function curMark(now) {
+    if (bmOpen) {
+      const i = bookmarks.indexOf(bmOpen.b), b = bookmarks[i];
+      if (i >= 0 && shownBy(b)) {
+        let prev = null, next = null;
+        bookmarks.forEach((x) => {
+          if (x === b || !shownBy(x)) return;
+          if (x.t < b.t && (!prev || x.t > prev.t)) prev = x;
+          if (x.t > b.t && (!next || x.t < next.t)) next = x;
+        });
+        const lowOk = !prev || now > prev.t + 0.3 || now >= bmOpen.floor - 0.3; // a nearby previous mark inside the pre-roll doesn't count
+        const highOk = !next || now < next.t - 0.3;
+        if (lowOk && highOk) return i;
+      }
+      bmOpen = null; // passed the next or previous mark: back to the plain rule
+    }
+    return markAt(now);
+  }
   function updateCurMark() {
-    const i = current && bookmarks.length ? markAt(nowTime()) : -1;
+    const i = current && bookmarks.length ? curMark(nowTime()) : -1;
     if (i === bmCur) return;
     bmCur = i;
     const list = $('bmList');
@@ -1603,18 +1629,26 @@
     if (r.top < sr.top + 30) sec.scrollTop -= sr.top + 30 - r.top; else if (r.bottom > sr.bottom) sec.scrollTop += r.bottom - sr.bottom;
   }
   setInterval(updateCurMark, 400);
+  // Open a saved mark: start PREROLL s before it and keep it current (see curMark).
+  function openMark(i) {
+    const b = bookmarks[i]; if (!b) return false;
+    const floor = Math.max(0, b.t - PREROLL);
+    if (!seekAbs(floor)) return false;
+    bmOpen = { b, floor };
+    bmCur = -2; updateCurMark();
+    return true;
+  }
   function jumpMark(dir) {
     if (!current) { flash('Load a game first'); return; }
-    const now = nowTime();
+    const now = nowTime(), order = shownByTime();
+    if (!order.length) { flash('No bookmarks'); return; }
+    const cur = curMark(now), pos = order.indexOf(cur);
     let best = -1;
-    bookmarks.forEach((b, i) => {
-      if (!shownBy(b)) return;
-      if (dir > 0 ? b.t > now + 0.3 && (best < 0 || b.t < bookmarks[best].t)
-                  : b.t < now - 2 && (best < 0 || b.t > bookmarks[best].t)) best = i;
-    });
-    if (best < 0) { flash(!bookmarks.some(shownBy) ? 'No bookmarks' : dir > 0 ? 'No later bookmark' : 'No earlier bookmark'); return; }
+    if (dir > 0) best = pos >= 0 ? (order[pos + 1] ?? -1) : (order.find((i) => bookmarks[i].t > now + 0.3) ?? -1);
+    else if (pos >= 0) best = now > bookmarks[cur].t + 2 ? cur : (order[pos - 1] ?? -1);
+    if (best < 0) { flash(dir > 0 ? 'No later bookmark' : 'No earlier bookmark'); return; }
     const b = bookmarks[best];
-    if (seekAbs(b.t)) { flash((dir > 0 ? '\u23ED ' : '\u23EE ') + fmt(b.t) + (b.note ? ' ' + String(b.note).slice(0, 40) : '')); bmCur = -2; updateCurMark(); }
+    if (openMark(best)) flash((dir > 0 ? '\u23ED ' : '\u23EE ') + fmt(b.t) + (b.note ? ' ' + String(b.note).slice(0, 40) : ''));
   }
   function insertByTime(b) { // before the first later mark, so a time-ordered list stays ordered
     const j = bookmarks.findIndex((x) => x.t > b.t);
@@ -1643,7 +1677,7 @@
     const li = e.target.closest('li'); if (!li) return;
     const btn = e.target.closest('[data-act]'), act = btn && btn.dataset.act;
     const i = Number(li.dataset.i);
-    if (act === 'seek') { seekAbs(bookmarks[i].t); if (YTP.on) btn.blur(); else video.focus(); }
+    if (act === 'seek') { openMark(i); if (YTP.on) btn.blur(); else video.focus(); }
     else if (act === 'del') { bookmarks.splice(i, 1); saveBookmarks(); renderBookmarks(); }
     else if (act === 'tag') { // none -> O -> D -> none
       const b = bookmarks[i], next = { '': 'o', o: 'd', d: '' }[tagOf(b)];
@@ -1825,7 +1859,7 @@
     const btn = e.target.closest('button'); const li = e.target.closest('li');
     if (!btn || !li || !shared) return;
     const s = shared.items[Number(li.dataset.i)]; if (!s) return;
-    if (btn.dataset.act === 'seek') { seekAbs(s.t); btn.blur(); if (!YTP.on) video.focus(); }
+    if (btn.dataset.act === 'seek') { seekAbs(Math.max(0, s.t - PREROLL)); btn.blur(); if (!YTP.on) video.focus(); }
     else if (btn.dataset.act === 'save') {
       // Adds a copy to this browser's bookmarks for this game; never replaces or removes any.
       if (!isSaved(s)) { const b = { t: s.t, note: s.note, at: Date.now() }; if (s.tag) b.tag = s.tag; insertByTime(b); saveBookmarks(); }
@@ -1921,6 +1955,9 @@
   // Add an entry (top of the list) with every user-visible change; the newest date is shown as "Updated".
   // d: date added to beta, in Central time (YYYY-MM-DD); k: new | chg (change) | fix | how (how-to); t: title; b: body. Plain text only.
   const NOTES = [
+    { d: '2026-11-04', k: 'chg', t: 'C adds a bookmark', b: 'Press C (for clip) to mark the current time. M still works too.' },
+    { d: '2026-11-04', k: 'chg', t: 'Bookmarks open 2 seconds early', b: 'Clicking a bookmark, or reaching it with N / P, starts 2 seconds before it so you see the lead-up.' },
+    { d: '2026-11-04', k: 'fix', t: 'Highlight stays on the bookmark you opened', b: 'After you open a bookmark it stays highlighted until the video reaches the next bookmark or goes back past the previous one. Rewinding a few seconds no longer highlights a bookmark from minutes earlier.' },
     { d: '2026-11-03', k: 'chg', t: 'Video stays at the top', b: 'On a computer screen the page now fits the window: the video sits at the top and never needs scrolling, and a long bookmark list scrolls inside the panel. Shortcuts is now a folding section like What\'s new (one opens at a time).' },
     { d: '2026-11-01', k: 'new', t: 'Update notice', b: 'When a newer version of the site is out, a small note at the bottom left offers to refresh. Refreshing keeps your place in the game.' },
     { d: '2026-11-01', k: 'how', t: 'Replay a play', b: 'Press P while a marked play runs to go back to its start; press P again for the mark before it.' },
@@ -2848,7 +2885,7 @@
         else if (CAST.connected) notReadyOnTv();
         break;
       }
-      case k === 'm' || k === 'M': addBookmark(); break;
+      case k === 'c' || k === 'C' || k === 'm' || k === 'M': addBookmark(); break; // C (clip); M still works
       case k === 'n' || k === 'N': jumpMark(1); break;
       case k === 'p' || k === 'P': jumpMark(-1); break;
       case k === 'b' || k === 'B': setPanel(!panelCollapsed, true); break;
@@ -2862,7 +2899,7 @@
   const KEY_NAMES = { ' ': ['space', 'Play / pause'], ArrowLeft: ['left', 'Back 5s'], ArrowRight: ['right', 'Forward 5s'],
     j: ['j', 'Back 10s'], k: ['k', 'Forward 10s'], ',': ['comma', 'Frame back'], '<': ['comma', 'Frame back'],
     '.': ['period', 'Frame forward'], '>': ['period', 'Frame forward'], '[': ['down', 'Slower'], ArrowDown: ['down', 'Slower'],
-    ']': ['up', 'Faster'], ArrowUp: ['up', 'Faster'], '\\': ['backslash', 'Reset speed'], m: ['m', 'Add bookmark'], n: ['n', 'Next bookmark'], p: ['p', 'Previous bookmark'],
+    ']': ['up', 'Faster'], ArrowUp: ['up', 'Faster'], '\\': ['backslash', 'Reset speed'], c: ['c', 'Add bookmark'], m: ['m', 'Add bookmark'], n: ['n', 'Next bookmark'], p: ['p', 'Previous bookmark'],
     b: ['b', 'Hide / show panel'], '/': ['slash', 'Find a game'], f: ['f', 'Fullscreen'] };
   const usageSeen = {};
   function trackOncePerMinute(path, title) {
