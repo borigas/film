@@ -222,15 +222,17 @@
   #sharedList .save:hover { color: var(--accent); border-color: var(--accent); }
   #sharedList .save svg { width: 16px; height: 16px; fill: currentColor; }
   .empty { color: var(--muted); font-size: 13px; }
-  /* What's new: closed on every load, at the bottom of the panel */
-  #notesSec { flex: none; padding: 6px 16px; }
-  #notesSec summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: 12px;
+  /* Shortcuts and What's new: folding sections at the bottom of the panel */
+  details.fold { flex: none; padding: 6px 16px; border-bottom: 1px solid var(--border); }
+  details.fold:last-child { border-bottom: none; }
+  details.fold summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: 12px;
     text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 2px 0; }
-  #notesSec summary::-webkit-details-marker { display: none; }
-  #notesSec summary::before { content: '\25B8'; font-size: 11px; transition: transform .15s; }
-  #notesSec[open] summary::before { transform: rotate(90deg); }
-  #notesSec summary:hover { color: var(--text); }
-  #notesSec summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details.fold summary::-webkit-details-marker { display: none; }
+  details.fold summary::before { content: '\25B8'; font-size: 11px; transition: transform .15s; }
+  details.fold[open] summary::before { transform: rotate(90deg); }
+  details.fold summary:hover { color: var(--text); }
+  details.fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #keysBody { margin: 6px 0 4px; max-height: 40vh; overflow: auto; }
   #notesUpdated { margin-left: auto; text-transform: none; letter-spacing: 0; }
   #notesList { list-style: none; margin: 6px 0 4px; padding: 0 4px 0 0; max-height: 40vh; overflow: auto; }
   #notesList li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -263,6 +265,24 @@
     pointer-events: none; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
   #castOverlay .cdev { font-weight: 600; }
   #castOverlay .cstate { font-size: 13px; opacity: .9; }
+  /* Wide layout: the video stays at the top of the window, whatever the panel's length. */
+  @media (min-width: 861px) {
+    #stage { align-self: flex-start; } /* short windows scroll; a long bookmark list no longer stretches the player */
+  }
+  /* Wide layout on a window of reasonable height: the page fits the window without scrolling. The player takes the
+     room left, video at its top; the bookmark list scrolls inside the panel, and Shortcuts / What's new fold away. */
+  @media (min-width: 861px) and (min-height: 520px) {
+    body { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+    main { min-height: 0; overflow: hidden; }
+    #stage { align-self: stretch; min-height: 0; }
+    #videoWrap { min-height: 0; align-items: flex-start; overflow: hidden; }
+    video { height: auto; max-height: 100%; object-fit: contain; }
+    #ytHost { max-height: 100%; }
+    #panelBody { overflow-y: auto; overscroll-behavior: contain; }
+  }
+  #videoWrap:fullscreen { align-items: center; }
+  #videoWrap:fullscreen video { height: 100%; max-height: 100%; }
+  #videoWrap:fullscreen #ytHost { max-height: 100%; }
   @media (max-width: 860px) {
     main { flex-direction: column; }
     aside { width: auto; flex: none; border-left: none; border-top: 1px solid var(--border); }
@@ -358,8 +378,9 @@
       <div id="bmNone" class="empty" hidden></div>
       <div id="bmEmpty" class="empty">Press <kbd>M</kbd> to mark the current time.</div>
     </section>
-    <section>
-      <h2>Shortcuts</h2>
+    <details id="keysSec" class="fold">
+      <summary>Shortcuts</summary>
+      <div id="keysBody">
       <div id="legend">
         <span><kbd>Space</kbd></span><span>Play / pause</span>
         <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd></span><span>Back / forward 5s</span>
@@ -375,8 +396,9 @@
         <span><kbd>B</kbd></span><span>Hide / show this panel</span>
       </div>
       <div class="small" style="margin-top:6px">YouTube: after clicking inside the YouTube player, its own keys apply; click outside it to use these.</div>
-    </section>
-    <details id="notesSec">
+      </div>
+    </details>
+    <details id="notesSec" class="fold">
       <summary>What's new <span id="notesUpdated"></span></summary>
       <ul id="notesList" aria-label="New features, changes and how-tos, newest first"></ul>
     </details>
@@ -1899,6 +1921,7 @@
   // Add an entry (top of the list) with every user-visible change; the newest date is shown as "Updated".
   // d: date added to beta, in Central time (YYYY-MM-DD); k: new | chg (change) | fix | how (how-to); t: title; b: body. Plain text only.
   const NOTES = [
+    { d: '2026-11-03', k: 'chg', t: 'Video stays at the top', b: 'On a computer screen the page now fits the window: the video sits at the top and never needs scrolling, and a long bookmark list scrolls inside the panel. Shortcuts is now a folding section like What\'s new (one opens at a time).' },
     { d: '2026-11-01', k: 'new', t: 'Update notice', b: 'When a newer version of the site is out, a small note at the bottom left offers to refresh. Refreshing keeps your place in the game.' },
     { d: '2026-11-01', k: 'how', t: 'Replay a play', b: 'Press P while a marked play runs to go back to its start; press P again for the mark before it.' },
     { d: '2026-11-01', k: 'new', t: 'Next / previous bookmark (N / P)', b: 'N jumps to the next bookmark after the playhead and P to the previous one, in time order. With Offense or Defense picked, they skip the others.' },
@@ -1941,18 +1964,25 @@
     });
     if (notes.length) $('notesUpdated').textContent = 'Updated ' + noteDate(notes[0].d, true);
   })();
-  // Wide layout: the panel is as tall as the window, so an open list takes only the room left (bookmarks shrink to
-  // their minimum first) and scrolls inside. Narrow layout: the page scrolls, so just bring the list into view.
-  function fitNotes() {
-    const sec = $('notesSec'), list = $('notesList');
+  // Shortcuts and What's new fold: one open at a time. Wide layout: the panel is as tall as the window, so an open
+  // section takes only the room left (bookmarks shrink to their minimum first) and scrolls inside. Narrow layout:
+  // the page scrolls, so just bring it into view.
+  const FOLDS = [['keysSec', 'keysBody'], ['notesSec', 'notesList']];
+  function fitFold(id, scrollId) {
+    const sec = $(id), list = $(scrollId), body = $('panelBody');
     list.style.maxHeight = '';
     if (!sec.open) return;
     if (matchMedia('(max-width: 860px)').matches) { sec.scrollIntoView({ block: 'nearest' }); return; }
-    const over = document.documentElement.scrollHeight - window.innerHeight;
+    const over = Math.max(body.scrollHeight - body.clientHeight, document.documentElement.scrollHeight - window.innerHeight);
     if (over > 0) list.style.maxHeight = Math.max(120, list.getBoundingClientRect().height - over) + 'px';
   }
-  $('notesSec').addEventListener('toggle', fitNotes);
-  window.addEventListener('resize', () => { if ($('notesSec').open) fitNotes(); });
+  FOLDS.forEach(([id, scrollId]) => {
+    $(id).addEventListener('toggle', () => {
+      if ($(id).open) FOLDS.forEach(([other]) => { if (other !== id) $(other).open = false; });
+      fitFold(id, scrollId);
+    });
+  });
+  window.addEventListener('resize', () => FOLDS.forEach(([id, scrollId]) => { if ($(id).open) fitFold(id, scrollId); }));
 
   // ---------- collapsible panel ----------
   function updatePanelToggle() {
